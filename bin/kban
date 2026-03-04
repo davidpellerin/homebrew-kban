@@ -1,0 +1,498 @@
+#!/usr/bin/env bash
+#
+# kban - Simple filesystem-based kanban board for Claude Code agents
+#
+# Usage: kban <command> [arguments]
+#
+
+set -euo pipefail
+
+# =============================================================================
+# Colors and Logging
+# =============================================================================
+
+if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[0;33m'
+    readonly BLUE='\033[0;34m'
+    readonly NC='\033[0m'
+else
+    readonly RED=''
+    readonly GREEN=''
+    readonly YELLOW=''
+    readonly BLUE=''
+    readonly NC=''
+fi
+
+die()         { echo -e "${RED}[ERROR]${NC} $1" >&2; exit "${2:-1}"; }
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1" >&2; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1" >&2; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
+
+# =============================================================================
+# Config
+# =============================================================================
+
+# shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
+readonly KBAN_VERSION="1.0.0"
+readonly KBAN_DIR="${PWD}/.kban/work"
+readonly LANES=(backlog ready doing "done")
+readonly COL_WIDTH=22
+
+# =============================================================================
+# Usage
+# =============================================================================
+
+usage() {
+    cat <<EOF
+kban - Simple filesystem-based kanban board
+
+Usage: kban <command> [arguments]
+
+Commands:
+    version             Show kban version
+    init                Create .kban folder structure in current directory
+    agent <tool>        Scaffold an AI coding agent for this project (claude, opencode)
+    board               Show the board overview
+    list [lane]         List tickets in a lane (or all lanes)
+    show <id>           Show ticket details
+    next                Show the next actionable ticket (ready + deps met)
+    start <id>          Move ticket to doing
+    done <id>           Mark ticket as done (auto-promotes backlog tickets)
+    move <id> <lane>    Move ticket to any lane
+
+Lanes: backlog, ready, doing, done
+
+EOF
+}
+
+# =============================================================================
+# Frontmatter helpers
+# =============================================================================
+
+# Extract a single field value from YAML frontmatter
+# Arguments:
+#   $1 - file path
+#   $2 - field name
+# Outputs:
+#   Field value to stdout
+get_field() {
+    local file="${1}"
+    local field="${2}"
+    awk 'BEGIN{fm=0} /^---$/{fm++; next} fm==1{print}' "${file}" \
+        | grep "^${field}:" \
+        | head -1 \
+        | sed "s/^${field}: *//"
+}
+
+# Output dependency ids, one per line
+# Arguments:
+#   $1 - file path
+# Outputs:
+#   One dep id per line, or nothing if no deps
+get_deps() {
+    local file="${1}"
+    local raw
+    raw="$(get_field "${file}" "depends_on")"
+    [[ -z "${raw}" || "${raw}" == "[]" ]] && return 0
+    # Strip brackets, split on commas, trim whitespace
+    echo "${raw}" | tr -d '[]' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$'
+}
+
+# =============================================================================
+# Ticket lookup
+# =============================================================================
+
+# Find a ticket file by id (searches all lanes)
+# Arguments:
+#   $1 - ticket id
+# Outputs:
+#   Full path to ticket file
+# Returns:
+#   0 if found, 1 otherwise
+find_ticket() {
+    local id="${1}"
+    local lane
+    for lane in "${LANES[@]}"; do
+        local path="${KBAN_DIR}/${lane}/${id}.md"
+        if [[ -f "${path}" ]]; then
+            echo "${path}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Get the lane name for a ticket
+# Arguments:
+#   $1 - ticket id
+# Outputs:
+#   Lane name
+get_lane() {
+    local id="${1}"
+    local path
+    path="$(find_ticket "${id}")"
+    basename "$(dirname "${path}")"
+}
+
+# Check if all dependencies for a ticket are in done
+# Arguments:
+#   $1 - file path
+# Returns:
+#   0 if all deps met (or no deps), 1 otherwise
+deps_met() {
+    local file="${1}"
+    local dep
+    # shellcheck disable=SC2312
+    while IFS= read -r dep; do
+        [[ -z "${dep}" ]] && continue
+        [[ -f "${KBAN_DIR}/done/${dep}.md" ]] || return 1
+    done < <(get_deps "${file}")
+    return 0
+}
+
+# =============================================================================
+# Commands
+# =============================================================================
+
+cmd_version() {
+    echo "kban ${KBAN_VERSION}"
+}
+
+# Initialize the .kban folder structure in the current directory
+sample_ticket() {
+    cat <<'TICKET'
+---
+title: Document project setup and onboarding steps
+priority: low
+depends_on: []
+---
+
+## Goal
+
+Ensure any new contributor (or AI agent) can get up and running quickly.
+
+## Tasks
+
+- [ ] Verify README covers prerequisites and install steps
+- [ ] Document how to run, test, and build the project
+- [ ] Add any environment variable or config file requirements
+- [ ] Note common gotchas or troubleshooting tips
+TICKET
+}
+
+cmd_init() {
+    if [[ -d "${KBAN_DIR}" ]]; then
+        log_warn ".kban already exists at ${KBAN_DIR}"
+        return 0
+    fi
+
+    local lane
+    for lane in "${LANES[@]}"; do
+        mkdir -p "${KBAN_DIR}/${lane}"
+        touch "${KBAN_DIR}/${lane}/.gitkeep"
+    done
+
+    # Create a sample backlog ticket
+    sample_ticket > "${KBAN_DIR}/backlog/SETUP-001.md"
+
+    log_success "Initialized .kban board at ${KBAN_DIR}"
+    log_info "Sample ticket created: SETUP-001 (backlog)"
+    log_info "Run 'kban board' to see your board"
+}
+
+# Display the kanban board
+cmd_board() {
+    local sep
+    sep="$(printf '%*s' "${COL_WIDTH}" '' | tr ' ' '─')"
+
+    echo ""
+
+    # Header row
+    local header=""
+    local lane cnt label
+    for lane in "${LANES[@]}"; do
+        # shellcheck disable=SC2312
+        cnt=$(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+        label="$(echo "${lane}" | tr '[:lower:]' '[:upper:]') (${cnt})"
+        header="${header}$(printf "%-${COL_WIDTH}s  " "${label}")"
+    done
+    # shellcheck disable=SC2154
+    echo -e "${BLUE}${header}${NC}"
+
+    # Separator row
+    local sep_row=""
+    for lane in "${LANES[@]}"; do
+        sep_row="${sep_row}${sep}  "
+    done
+    echo "${sep_row}"
+
+    # Find max ticket count across lanes
+    local max=0
+    for lane in "${LANES[@]}"; do
+        # shellcheck disable=SC2312
+        cnt=$(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "${cnt}" -gt "${max}" ]] && max="${cnt}"
+    done
+
+    # Print one row per ticket slot
+    local i row ticket file
+    for ((i=1; i<=max; i++)); do
+        row=""
+        for lane in "${LANES[@]}"; do
+            # shellcheck disable=SC2312
+            file=$(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | sort | sed -n "${i}p")
+            if [[ -n "${file}" ]]; then
+                ticket=$(basename "${file}" .md)
+            else
+                ticket=""
+            fi
+            row="${row}$(printf "%-${COL_WIDTH}s  " "${ticket}")"
+        done
+        echo "${row}"
+    done
+    echo ""
+}
+
+# List tickets in one or all lanes
+# Arguments:
+#   $1 - lane name, or "all" (default)
+cmd_list() {
+    local lane="${1:-all}"
+    local lane_name
+    if [[ "${lane}" == "all" ]]; then
+        for lane_name in "${LANES[@]}"; do
+            local has_tickets=false
+            # shellcheck disable=SC2312
+            while IFS= read -r f; do
+                if [[ "${has_tickets}" == "false" ]]; then
+                    # shellcheck disable=SC2154
+                    echo -e "${YELLOW}[${lane_name}]${NC}"
+                    has_tickets=true
+                fi
+                basename "${f}" .md
+            done < <(find "${KBAN_DIR}/${lane_name}" -name "*.md" 2>/dev/null | sort)
+        done
+    else
+        # shellcheck disable=SC2312
+        while IFS= read -r f; do
+            basename "${f}" .md
+        done < <(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | sort)
+    fi
+}
+
+# Show ticket details
+# Arguments:
+#   $1 - ticket id
+cmd_show() {
+    [[ $# -eq 0 ]] && die "Usage: kban show <id>"
+    local id="${1}"
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    local lane
+    lane="$(get_lane "${id}")"
+
+    # shellcheck disable=SC2154
+    echo -e "${BLUE}[${lane}]${NC} ${id}"
+    echo "─────────────────────────────────────"
+    cat "${path}"
+}
+
+# Output the id of the next actionable ticket (in ready, deps met)
+cmd_next() {
+    local found=false
+    local f
+    # shellcheck disable=SC2312
+    while IFS= read -r f; do
+        # shellcheck disable=SC2310
+        if deps_met "${f}"; then
+            basename "${f}" .md
+            found=true
+            break
+        fi
+    done < <(find "${KBAN_DIR}/ready" -name "*.md" 2>/dev/null | sort)
+
+    if [[ "${found}" == "false" ]]; then
+        log_warn "No actionable tickets in ready"
+        return 1
+    fi
+}
+
+# Move a ticket to a lane
+# Arguments:
+#   $1 - ticket id
+#   $2 - target lane
+cmd_move() {
+    [[ $# -lt 2 ]] && die "Usage: kban move <id> <lane>"
+    local id="${1}"
+    local target="${2}"
+
+    local valid=false
+    local lane
+    for lane in "${LANES[@]}"; do
+        [[ "${lane}" == "${target}" ]] && valid=true
+    done
+    [[ "${valid}" == "false" ]] && die "Invalid lane: ${target}. Valid: ${LANES[*]}"
+
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    local current
+    current="$(get_lane "${id}")"
+
+    if [[ "${current}" == "${target}" ]]; then
+        log_warn "${id} is already in ${target}"
+        return 0
+    fi
+
+    mv "${path}" "${KBAN_DIR}/${target}/${id}.md"
+    log_success "${id}: ${current} → ${target}"
+
+    # Auto-promote backlog tickets whose deps are now fully met
+    if [[ "${target}" == "done" ]]; then
+        local f bid
+        # shellcheck disable=SC2312
+        while IFS= read -r f; do
+            bid="$(basename "${f}" .md)"
+            # shellcheck disable=SC2310
+            if deps_met "${f}"; then
+                mv "${f}" "${KBAN_DIR}/ready/${bid}.md"
+                log_info "Auto-promoted ${bid} → ready"
+            fi
+        done < <(find "${KBAN_DIR}/backlog" -name "*.md" 2>/dev/null | sort)
+    fi
+}
+
+# Move ticket to doing
+# Arguments:
+#   $1 - ticket id
+cmd_start() {
+    [[ $# -eq 0 ]] && die "Usage: kban start <id>"
+    cmd_move "${1}" "doing"
+}
+
+# Move ticket to done (with auto-promote)
+# Arguments:
+#   $1 - ticket id
+cmd_done() {
+    [[ $# -eq 0 ]] && die "Usage: kban done <id>"
+    cmd_move "${1}" "done"
+}
+
+# Scaffold an AI coding agent for the current project
+# Arguments:
+#   $1 - tool name (claude, opencode)
+cmd_agent() {
+    [[ $# -eq 0 ]] && die "Usage: kban agent <tool>  (supported: claude, opencode)"
+    local tool="${1}"
+
+    case "${tool}" in
+        claude)   cmd_agent_claude ;;
+        opencode) cmd_agent_opencode ;;
+        *) die "Unknown tool: ${tool}. Supported: claude, opencode" ;;
+    esac
+}
+
+agent_claude_template() {
+    cat <<'AGENT'
+---
+name: kban
+description: General-purpose coding agent that uses the kanban board for task tracking. Invoke when asked to work through tickets, implement features, fix bugs, or pick up the next task.
+model: claude-sonnet-4-6
+tools: [Bash, Read, Write, Edit, Glob, Grep]
+---
+
+# Coder Agent
+
+You are an experienced software developer. You implement features, fix bugs, and refactor code in this project using the kanban board to track your work.
+
+## Role
+
+You read tickets, do the work they describe, and keep the board up to date. You follow the project's existing patterns and conventions.
+
+## Workflow
+
+1. `kban board` — see current board state
+2. `kban next` — get the id of the next actionable ticket
+3. `kban show <id>` — read the full ticket before starting
+4. `kban start <id>` — move it to doing
+5. Implement the ticket per its acceptance criteria
+6. Run the project's tests and linting — fix any issues before marking done
+7. `kban done <id>` — mark it done (auto-promotes backlog tickets whose deps are now met)
+8. Repeat from step 2 until no tickets remain in ready
+
+Lanes: `backlog` → `ready` → `doing` → `done`
+
+Tickets in `backlog` are auto-promoted to `ready` when all their `depends_on` ids move to `done`.
+
+## Reporting Status
+
+When asked what's outstanding or what's left to do, run:
+
+```bash
+kban board
+kban list
+```
+
+Summarize: how many tickets per lane, which are actionable now (ready, deps met), and which are still blocked.
+
+## Guidelines
+
+- Always read files before editing them.
+- Follow the project's existing style, naming, and structure exactly.
+- Keep changes minimal — do not add features or refactoring beyond what the ticket requests.
+- Do not mark a ticket done until tests pass.
+AGENT
+}
+
+cmd_agent_claude() {
+    local dest=".claude/agents/kban.md"
+    if [[ -f "${dest}" ]]; then
+        log_warn "${dest} already exists — skipping"
+        return 0
+    fi
+    mkdir -p ".claude/agents"
+    agent_claude_template > "${dest}"
+    log_success "Created ${dest}"
+    log_info "Run 'kban init' first if you haven't set up the board yet"
+}
+
+cmd_agent_opencode() {
+    log_warn "OpenCode agent scaffolding is not yet supported"
+    log_info "Contributions welcome: https://github.com/davidpellerin/homebrew-kban"
+    return 1
+}
+
+# =============================================================================
+# Main
+# =============================================================================
+
+main() {
+    [[ $# -eq 0 ]] && { usage; exit 0; }
+
+    local cmd="${1}"
+    shift
+
+    case "${cmd}" in
+        version)   cmd_version ;;
+        init)      cmd_init ;;
+        agent)     cmd_agent "$@" ;;
+        board)     cmd_board ;;
+        list)      cmd_list "$@" ;;
+        show)      cmd_show "$@" ;;
+        next)      cmd_next ;;
+        start)     cmd_start "$@" ;;
+        "done")    cmd_done "$@" ;;
+        move)      cmd_move "$@" ;;
+        -h|--help) usage ;;
+        *) die "Unknown command: ${cmd}. Use 'kban --help' for usage." ;;
+    esac
+}
+
+main "$@"
