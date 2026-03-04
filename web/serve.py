@@ -138,6 +138,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 title    = payload.get("title", "").strip()
                 lane     = payload.get("lane", "backlog").strip()
                 priority = payload.get("priority", "normal").strip()
+                body     = payload.get("body", "").strip()
             except (json.JSONDecodeError, ValueError):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
@@ -164,10 +165,107 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
             ticket_id = f"TASK-{max(existing, default=0) + 1:03d}"
 
             content = f"---\ntitle: {title}\npriority: {priority}\ndepends_on: []\n---\n"
+            if body:
+                content += body + "\n"
             with open(os.path.join(kban_dir, lane, f"{ticket_id}.md"), "w") as fh:
                 fh.write(content)
 
             self.send_json({"ok": True, "id": ticket_id, "lane": lane})
+
+        elif path == "/api/delete":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                payload = json.loads(self.rfile.read(length))
+                ticket_id = payload.get("id", "").strip()
+            except (json.JSONDecodeError, ValueError):
+                self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            if not ticket_id:
+                self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            kban_dir = _kban_dir()
+            if not kban_dir:
+                self.send_json({"error": "board not found"}, HTTPStatus.NOT_FOUND)
+                return
+
+            src = None
+            for lane in LANES:
+                candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
+                if os.path.isfile(candidate):
+                    src = candidate
+                    break
+
+            if src is None:
+                self.send_json({"error": f"ticket not found: {ticket_id}"}, HTTPStatus.NOT_FOUND)
+                return
+
+            os.remove(src)
+            self.send_json({"ok": True, "id": ticket_id})
+
+        elif path == "/api/update":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                payload = json.loads(self.rfile.read(length))
+                ticket_id = payload.get("id", "").strip()
+                title     = payload.get("title", "").strip()
+                priority  = payload.get("priority", "normal").strip()
+                body      = payload.get("body", "").strip()
+                new_lane  = payload.get("lane", "").strip()
+            except (json.JSONDecodeError, ValueError):
+                self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            if not ticket_id or not title:
+                self.send_json({"error": "id and title are required"}, HTTPStatus.BAD_REQUEST)
+                return
+            if new_lane and new_lane not in LANES:
+                self.send_json({"error": f"invalid lane: {new_lane}"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            kban_dir = _kban_dir()
+            if not kban_dir:
+                self.send_json({"error": "board not found"}, HTTPStatus.NOT_FOUND)
+                return
+
+            src = None
+            current_lane = None
+            for lane in LANES:
+                candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
+                if os.path.isfile(candidate):
+                    src = candidate
+                    current_lane = lane
+                    break
+
+            if src is None:
+                self.send_json({"error": f"ticket not found: {ticket_id}"}, HTTPStatus.NOT_FOUND)
+                return
+
+            # Preserve existing frontmatter fields we don't edit (e.g. depends_on)
+            with open(src) as fh:
+                old_fm, _ = _parse_frontmatter(fh.read())
+
+            depends_on = old_fm.get("depends_on", [])
+            if isinstance(depends_on, list):
+                deps_str = "[" + ", ".join(depends_on) + "]"
+            else:
+                deps_str = str(depends_on)
+
+            content = f"---\ntitle: {title}\npriority: {priority}\ndepends_on: {deps_str}\n---\n"
+            if body:
+                content += body + "\n"
+
+            target_lane = new_lane if new_lane else current_lane
+            dest = os.path.join(kban_dir, target_lane, f"{ticket_id}.md")
+
+            with open(src, "w") as fh:
+                fh.write(content)
+
+            if src != dest:
+                shutil.move(src, dest)
+
+            self.send_json({"ok": True, "id": ticket_id, "lane": target_lane})
 
         elif path == "/api/move":
             length = int(self.headers.get("Content-Length", 0))

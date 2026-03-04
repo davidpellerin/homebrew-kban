@@ -224,6 +224,7 @@
     }
 
     .modal-backdrop.hidden { display: none; }
+    .hidden { display: none !important; }
 
     .modal {
       background: var(--bg-secondary);
@@ -373,6 +374,11 @@
       color: var(--text-muted);
     }
 
+    .form-input:is(textarea) {
+      resize: vertical;
+      min-height: 6rem;
+    }
+
     .form-input,
     .form-select {
       background: var(--bg-tertiary);
@@ -421,6 +427,12 @@
 
     .btn-primary {
       background: var(--blue);
+      color: #0d1117;
+      font-weight: 600;
+    }
+
+    .btn-danger {
+      background: var(--red);
       color: #0d1117;
       font-weight: 600;
     }
@@ -489,6 +501,10 @@
           <option value="urgent">Urgent</option>
         </select>
       </div>
+      <div class="form-group">
+        <label class="form-label" for="nt-body">Description</label>
+        <textarea class="form-input" id="nt-body" rows="4" placeholder="Optional description…"></textarea>
+      </div>
     </div>
     <div class="form-footer">
       <button class="btn btn-ghost" id="new-task-cancel">Cancel</button>
@@ -507,9 +523,49 @@
       </div>
       <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
     </div>
+
+    <!-- View mode -->
     <div class="modal-meta" id="modal-meta"></div>
-    <div class="modal-body">
+    <div class="modal-body" id="modal-view-body">
       <div class="ticket-body" id="modal-body"></div>
+    </div>
+    <div class="form-footer hidden" id="modal-view-footer">
+      <button class="btn btn-ghost" id="modal-edit">Edit</button>
+    </div>
+
+    <!-- Edit mode (hidden by default) -->
+    <div class="modal-body hidden" id="modal-edit-body">
+      <div class="form-group">
+        <label class="form-label" for="et-title">Title</label>
+        <input class="form-input" id="et-title" type="text" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="et-lane">Lane</label>
+        <select class="form-select" id="et-lane">
+          <option value="backlog">Backlog</option>
+          <option value="ready">Ready</option>
+          <option value="doing">Doing</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="et-priority">Priority</label>
+        <select class="form-select" id="et-priority">
+          <option value="low">Low</option>
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="et-body">Description</label>
+        <textarea class="form-input" id="et-body" rows="6" placeholder="Optional description…"></textarea>
+      </div>
+    </div>
+    <div class="form-footer hidden" id="modal-edit-footer">
+      <button class="btn btn-danger" id="modal-delete" style="margin-right: auto;">Delete</button>
+      <button class="btn btn-ghost" id="modal-edit-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-edit-save">Save</button>
     </div>
   </div>
 </div>
@@ -528,8 +584,22 @@
   // ── Modal ────────────────────────────────────────────────────────────────
   const backdrop = document.getElementById('modal-backdrop');
   const modal    = document.getElementById('modal');
+  let currentTicketId  = null;
+  let currentTicketObj = null;
+  let currentLaneId    = null;
+
+  function setEditMode(on) {
+    document.getElementById('modal-meta').classList.toggle('hidden', on);
+    document.getElementById('modal-view-body').classList.toggle('hidden', on);
+    document.getElementById('modal-view-footer').classList.toggle('hidden', on);
+    document.getElementById('modal-edit-body').classList.toggle('hidden', !on);
+    document.getElementById('modal-edit-footer').classList.toggle('hidden', !on);
+  }
 
   function openModal(ticket, laneId) {
+    currentTicketId  = ticket.id;
+    currentTicketObj = ticket;
+    currentLaneId    = laneId;
     modal.style.setProperty('--lane-color', laneColor(laneId));
     document.getElementById('modal-id').textContent    = ticket.id;
     document.getElementById('modal-title').textContent = ticket.title;
@@ -555,16 +625,79 @@
     }
 
     backdrop.classList.remove('hidden');
-    document.getElementById('modal-close').focus();
+    openEditMode();
   }
 
   function closeModal() {
     backdrop.classList.add('hidden');
+    setEditMode(false);
+  }
+
+  function openEditMode() {
+    const t = currentTicketObj;
+    document.getElementById('et-title').value    = t.title;
+    document.getElementById('et-priority').value = t.priority || 'normal';
+    document.getElementById('et-lane').value     = currentLaneId;
+    document.getElementById('et-body').value     = t.body || '';
+    setEditMode(true);
+    document.getElementById('et-title').focus();
   }
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !backdrop.classList.contains('hidden')) closeModal();
+  });
+
+  document.getElementById('modal-edit').addEventListener('click', openEditMode);
+  document.getElementById('modal-edit-cancel').addEventListener('click', closeModal);
+
+  document.getElementById('modal-edit-save').addEventListener('click', async () => {
+    const title    = document.getElementById('et-title').value.trim();
+    const priority = document.getElementById('et-priority').value;
+    const lane     = document.getElementById('et-lane').value;
+    const body     = document.getElementById('et-body').value.trim();
+    if (!title) { document.getElementById('et-title').focus(); return; }
+    try {
+      const res = await fetch('/api/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentTicketId, title, priority, lane, body }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Update failed:', err.error || res.status);
+        return;
+      }
+    } catch (err) {
+      console.error('Update error:', err);
+      return;
+    }
+    closeModal();
+    load();
+  });
+
+  document.getElementById('modal-delete').addEventListener('click', async () => {
+    if (!currentTicketId) return;
+    if (!confirm(`Delete ${currentTicketId}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentTicketId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Delete failed:', err.error || res.status);
+        return;
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      return;
+    }
+    closeModal();
+    load();
+  });
 
   function laneColor(id) {
     return { backlog: 'var(--purple)', ready: 'var(--blue)', doing: 'var(--yellow)', done: 'var(--green)' }[id] || 'var(--border)';
@@ -731,11 +864,13 @@
   const ntTitle    = document.getElementById('nt-title');
   const ntLane     = document.getElementById('nt-lane');
   const ntPriority = document.getElementById('nt-priority');
+  const ntBody     = document.getElementById('nt-body');
 
   function openNewTask() {
     ntTitle.value    = '';
     ntLane.value     = 'backlog';
     ntPriority.value = 'normal';
+    ntBody.value     = '';
     ntBackdrop.classList.remove('hidden');
     ntTitle.focus();
   }
@@ -751,7 +886,7 @@
       const res = await fetch('/api/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, lane: ntLane.value, priority: ntPriority.value }),
+        body: JSON.stringify({ title, lane: ntLane.value, priority: ntPriority.value, body: ntBody.value.trim() }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
