@@ -115,3 +115,7 @@ using the kban agent, pick up the next ticket and implement it
 ```
 using the kban agent, show me what's blocked and why
 ```
+
+## License
+
+MIT © [David Pellerin](https://github.com/davidpellerin)
