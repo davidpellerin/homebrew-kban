@@ -9,14 +9,21 @@ brew tap davidpellerin/kban
 brew install kban
 ```
 
-## Usage
+## Getting Started
 
-Run from any project directory that has a `.kban/work/` structure:
+Navigate to your project directory and run:
+
+```bash
+kban init                # Scaffold the kanban board (.kban/work/ structure)
+kban agent claude        # Install the kban agent for Claude Code
+```
+
+This creates the board structure and a sample backlog ticket to get you going.
+
+## Usage
 
 ```
 kban version             # Show kban version
-kban init                # Create .kban folder structure in current directory
-kban agent <tool>        # Scaffold an AI coding agent (claude, opencode)
 kban board               # Show the board overview
 kban list [lane]         # List tickets in a lane (or all lanes)
 kban show <id>           # Show ticket details
