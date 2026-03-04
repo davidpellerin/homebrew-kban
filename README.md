@@ -97,6 +97,8 @@ KBAN_HOST=0.0.0.0 KBAN_PORT=9000 kban serve
 
 Opens a minimal browser interface at `http://localhost:8080` showing the board. Requires Python 3 (no extra packages needed).
 
+![kban serve web UI](images/serve.png)
+
 ## Sample Prompts (Claude Code)
 
 After running `kban agent claude`, try these in Claude Code:
