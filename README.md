@@ -20,6 +20,17 @@ kban agent claude        # Install the kban agent for Claude Code
 
 This creates the board structure and a sample backlog ticket to get you going.
 
+## Example
+
+```
+$ kban board
+
+BACKLOG (1)             READY (2)               DOING (1)               DONE (1)
+──────────────────────  ──────────────────────  ──────────────────────  ──────────────────────
+003-Add-Pagination      001-Setup-API           002-Create-UI           000-Init-Project
+                        004-Write-Tests
+```
+
 ## Usage
 
 ```
