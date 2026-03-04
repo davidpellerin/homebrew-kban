@@ -61,8 +61,13 @@ Commands:
     start <id>          Move ticket to doing
     done <id>           Mark ticket as done (auto-promotes backlog tickets)
     move <id> <lane>    Move ticket to any lane
+    serve               Start the web UI (default: http://localhost:8080)
 
 Lanes: backlog, ready, doing, done
+
+Environment variables for serve:
+    KBAN_HOST           Host to bind (default: localhost)
+    KBAN_PORT           Port to bind (default: 8080)
 
 EOF
 }
@@ -469,6 +474,16 @@ cmd_agent_opencode() {
     return 1
 }
 
+# Start the web UI
+cmd_serve() {
+    local script
+    script="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../web/serve.py"
+    if [[ ! -f "${script}" ]]; then
+        die "Web server script not found: ${script}"
+    fi
+    exec python3 "${script}"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -490,6 +505,7 @@ main() {
         start)     cmd_start "$@" ;;
         "done")    cmd_done "$@" ;;
         move)      cmd_move "$@" ;;
+        serve)     cmd_serve ;;
         -h|--help) usage ;;
         *) die "Unknown command: ${cmd}. Use 'kban --help' for usage." ;;
     esac

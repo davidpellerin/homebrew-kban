@@ -82,9 +82,20 @@ kban next                # Show the next actionable ticket (ready + deps met)
 kban start <id>          # Move ticket to doing
 kban done <id>           # Mark ticket as done (auto-promotes backlog tickets)
 kban move <id> <lane>    # Move ticket to any lane
+kban serve               # Start the web UI at http://localhost:8080
 ```
 
 Lanes: `backlog`, `ready`, `doing`, `done`
+
+### Web UI
+
+```bash
+kban serve
+# or with custom host/port:
+KBAN_HOST=0.0.0.0 KBAN_PORT=9000 kban serve
+```
+
+Opens a minimal browser interface at `http://localhost:8080` showing the board. Requires Python 3 (no extra packages needed).
 
 ## Sample Prompts (Claude Code)
 
