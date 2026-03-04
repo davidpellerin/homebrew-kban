@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kban</title>
+  <style>
+    /* ── Design tokens (borrowed from Mission Control) ─────────────────── */
+    :root {
+      --bg:           #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary:  #21262d;
+      --border:       #30363d;
+      --text:         #c9d1d9;
+      --text-muted:   #8b949e;
+      --blue:         #58a6ff;
+      --green:        #3fb950;
+      --yellow:       #d29922;
+      --red:          #f85149;
+      --purple:       #a371f7;
+      --pink:         #db61a2;
+    }
+
+    /* ── Reset / base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track  { background: var(--bg-secondary); }
+    ::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--blue);
+      letter-spacing: 0.05em;
+    }
+
+    .header-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Board layout ───────────────────────────────────────────────────── */
+    .board {
+      flex: 1;
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+
+    /* ── Column ─────────────────────────────────────────────────────────── */
+    .column {
+      flex: 1;
+      min-width: 220px;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+      border-top: 2px solid var(--lane-color, var(--border));
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .column[data-lane="backlog"] { --lane-color: var(--purple); }
+    .column[data-lane="ready"]   { --lane-color: var(--blue); }
+    .column[data-lane="doing"]   { --lane-color: var(--yellow); }
+    .column[data-lane="done"]    { --lane-color: var(--green); }
+
+    .column-header {
+      padding: 0.5rem 0.625rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .column-title {
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .column-count {
+      font-size: 0.7rem;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .column-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .column-empty {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 1.5rem 0.5rem;
+      opacity: 0.6;
+    }
+
+    /* ── Card ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+      border-radius: 8px;
+      padding: 0.75rem;
+      cursor: default;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .card:hover {
+      border-color: color-mix(in srgb, var(--blue) 40%, transparent);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .card-id {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-bottom: 0.3rem;
+      letter-spacing: 0.04em;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      line-height: 1.4;
+      font-weight: 500;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 0.6rem;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+    }
+
+    /* ── Priority badge ─────────────────────────────────────────────────── */
+    .priority {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      text-transform: capitalize;
+    }
+
+    .priority-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .priority[data-p="low"]    { color: var(--text-muted); }
+    .priority[data-p="low"]    .priority-dot { background: color-mix(in srgb, var(--text-muted) 40%, transparent); }
+    .priority[data-p="normal"] { color: var(--blue); }
+    .priority[data-p="normal"] .priority-dot { background: var(--blue); }
+    .priority[data-p="high"]   { color: var(--yellow); }
+    .priority[data-p="high"]   .priority-dot { background: var(--yellow); }
+    .priority[data-p="urgent"] { color: var(--red); }
+    .priority[data-p="urgent"] .priority-dot { background: var(--red); }
+
+    /* ── Deps badge ─────────────────────────────────────────────────────── */
+    .deps-badge {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    /* ── Modal ──────────────────────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+
+    .modal-backdrop.hidden { display: none; }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--lane-color, var(--border));
+      border-radius: 10px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .modal-header-text { flex: 1; min-width: 0; }
+
+    .modal-id {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+    }
+
+    .modal-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .modal-close:hover { background: var(--bg-tertiary); color: var(--text); }
+
+    .modal-meta {
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .ticket-body {
+      font-size: 0.8rem;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .ticket-body-empty {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* ── Error state ────────────────────────────────────────────────────── */
+    .board-error {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      color: var(--red);
+      padding: 2rem;
+    }
+
+    /* ── Loading shimmer ────────────────────────────────────────────────── */
+    @keyframes shimmer {
+      0%   { opacity: 0.4; }
+      50%  { opacity: 0.7; }
+      100% { opacity: 0.4; }
+    }
+
+    .loading .card {
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+
+    /* ── New Task button ────────────────────────────────────────────────── */
+    .btn-new-task {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.65rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-new-task:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: color-mix(in srgb, var(--blue) 8%, transparent);
+    }
+
+    .btn-new-task .plus {
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    /* ── New Task form modal ─────────────────────────────────────────────── */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.875rem;
+    }
+
+    .form-group:last-of-type { margin-bottom: 0; }
+
+    .form-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+    }
+
+    .form-input,
+    .form-select {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 0.45rem 0.6rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus,
+    .form-select:focus { border-color: var(--blue); }
+
+    .form-select option { background: var(--bg-tertiary); }
+
+    .form-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      padding: 0.875rem 1rem;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+
+    .btn-ghost {
+      background: none;
+      border-color: var(--border);
+      color: var(--text-muted);
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #0d1117;
+      font-weight: 600;
+    }
+
+    /* ── Drag and drop ──────────────────────────────────────────────────── */
+    .card[draggable="true"] {
+      cursor: grab;
+    }
+
+    .card.dragging {
+      opacity: 0.4;
+      cursor: grabbing;
+    }
+
+    .column-body.drag-over {
+      background: color-mix(in srgb, var(--lane-color, var(--border)) 8%, transparent);
+      outline: 2px dashed color-mix(in srgb, var(--lane-color, var(--border)) 60%, transparent);
+      outline-offset: -4px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">kban</span>
+  <span class="header-meta" id="meta">loading…</span>
+  <button class="btn-new-task" id="new-task-btn" aria-label="New task">
+    <span class="plus">+</span> New Task
+  </button>
+</header>
+
+<div class="board" id="board">
+  <!-- populated by JS -->
+</div>
+
+<!-- New Task modal -->
+<div class="modal-backdrop hidden" id="new-task-backdrop">
+  <div class="modal" style="--lane-color: var(--blue)">
+    <div class="modal-header">
+      <div class="modal-header-text">
+        <div class="modal-title">New Task</div>
+      </div>
+      <button class="modal-close" id="new-task-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="nt-title">Title</label>
+        <input class="form-input" id="nt-title" type="text" placeholder="What needs to be done?" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nt-lane">Lane</label>
+        <select class="form-select" id="nt-lane">
+          <option value="backlog">Backlog</option>
+          <option value="ready">Ready</option>
+          <option value="doing">Doing</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nt-priority">Priority</label>
+        <select class="form-select" id="nt-priority">
+          <option value="low">Low</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-footer">
+      <button class="btn btn-ghost" id="new-task-cancel">Cancel</button>
+      <button class="btn btn-primary" id="new-task-submit">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ticket detail modal -->
+<div class="modal-backdrop hidden" id="modal-backdrop">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-header-text">
+        <div class="modal-id" id="modal-id"></div>
+        <div class="modal-title" id="modal-title"></div>
+      </div>
+      <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-meta" id="modal-meta"></div>
+    <div class="modal-body">
+      <div class="ticket-body" id="modal-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const LANES = [
+    { id: 'backlog', label: 'Backlog' },
+    { id: 'ready',   label: 'Ready' },
+    { id: 'doing',   label: 'Doing' },
+    { id: 'done',    label: 'Done' },
+  ];
+
+  // lane → ticket[]
+  const boardData = {};
+
+  // ── Modal ────────────────────────────────────────────────────────────────
+  const backdrop = document.getElementById('modal-backdrop');
+  const modal    = document.getElementById('modal');
+
+  function openModal(ticket, laneId) {
+    modal.style.setProperty('--lane-color', laneColor(laneId));
+    document.getElementById('modal-id').textContent    = ticket.id;
+    document.getElementById('modal-title').textContent = ticket.title;
+
+    // meta row: priority + deps
+    const meta = document.getElementById('modal-meta');
+    meta.innerHTML = '';
+    meta.appendChild(priorityEl(ticket.priority));
+    if (ticket.depends_on && ticket.depends_on.length > 0) {
+      const deps = document.createElement('span');
+      deps.className = 'deps-badge';
+      deps.textContent = `deps: ${ticket.depends_on.join(', ')}`;
+      meta.appendChild(deps);
+    }
+
+    const bodyEl = document.getElementById('modal-body');
+    if (ticket.body) {
+      bodyEl.className = 'ticket-body';
+      bodyEl.textContent = ticket.body;
+    } else {
+      bodyEl.className = 'ticket-body-empty';
+      bodyEl.textContent = 'No description.';
+    }
+
+    backdrop.classList.remove('hidden');
+    document.getElementById('modal-close').focus();
+  }
+
+  function closeModal() {
+    backdrop.classList.add('hidden');
+  }
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  function laneColor(id) {
+    return { backlog: 'var(--purple)', ready: 'var(--blue)', doing: 'var(--yellow)', done: 'var(--green)' }[id] || 'var(--border)';
+  }
+
+  // ── Card / column builders ───────────────────────────────────────────────
+  function priorityEl(p) {
+    const wrap = document.createElement('div');
+    wrap.className = 'priority';
+    wrap.dataset.p = p || 'normal';
+    const dot = document.createElement('span');
+    dot.className = 'priority-dot';
+    wrap.appendChild(dot);
+    wrap.appendChild(document.createTextNode(p || 'normal'));
+    return wrap;
+  }
+
+  let dragTicketId = null;
+
+  function cardEl(ticket, laneId) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.setAttribute('draggable', 'true');
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+
+    card.addEventListener('dragstart', e => {
+      dragTicketId = ticket.id;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', ticket.id);
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+    });
+
+    // Only open modal on click if not a drag
+    let didDrag = false;
+    card.addEventListener('dragstart', () => { didDrag = true; });
+    card.addEventListener('click', () => { if (!didDrag) openModal(ticket, laneId); didDrag = false; });
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(ticket, laneId); } });
+
+    const idEl = document.createElement('div');
+    idEl.className = 'card-id';
+    idEl.textContent = ticket.id;
+    card.appendChild(idEl);
+
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = ticket.title;
+    card.appendChild(title);
+
+    const footer = document.createElement('div');
+    footer.className = 'card-footer';
+    footer.appendChild(priorityEl(ticket.priority));
+
+    if (ticket.depends_on && ticket.depends_on.length > 0) {
+      const deps = document.createElement('span');
+      deps.className = 'deps-badge';
+      deps.textContent = `deps: ${ticket.depends_on.join(', ')}`;
+      footer.appendChild(deps);
+    }
+
+    card.appendChild(footer);
+    return card;
+  }
+
+  function columnEl(lane, tickets) {
+    const col = document.createElement('div');
+    col.className = 'column';
+    col.dataset.lane = lane.id;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'column-header';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'column-title';
+    titleEl.textContent = lane.label;
+
+    const countEl = document.createElement('span');
+    countEl.className = 'column-count';
+    countEl.textContent = tickets.length;
+
+    hdr.appendChild(titleEl);
+    hdr.appendChild(countEl);
+    col.appendChild(hdr);
+
+    const body = document.createElement('div');
+    body.className = 'column-body';
+
+    body.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      body.classList.add('drag-over');
+    });
+    body.addEventListener('dragleave', e => {
+      if (!body.contains(e.relatedTarget)) body.classList.remove('drag-over');
+    });
+    body.addEventListener('drop', async e => {
+      e.preventDefault();
+      body.classList.remove('drag-over');
+      const id = dragTicketId || e.dataTransfer.getData('text/plain');
+      if (!id) return;
+      try {
+        const res = await fetch('/api/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, lane: lane.id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('Move failed:', err.error || res.status);
+        }
+      } catch (err) {
+        console.error('Move error:', err);
+      }
+      dragTicketId = null;
+      load();
+    });
+
+    if (tickets.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'column-empty';
+      empty.textContent = 'no tickets';
+      body.appendChild(empty);
+    } else {
+      tickets.forEach(t => body.appendChild(cardEl(t, lane.id)));
+    }
+
+    col.appendChild(body);
+    return col;
+  }
+
+  async function load() {
+    const board = document.getElementById('board');
+    const meta  = document.getElementById('meta');
+
+    try {
+      const res = await fetch('/api/board');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      board.innerHTML = '';
+      let total = 0;
+      LANES.forEach(lane => {
+        const tickets = data[lane.id] || [];
+        total += tickets.length;
+        board.appendChild(columnEl(lane, tickets));
+      });
+
+      meta.textContent = `${total} ticket${total !== 1 ? 's' : ''}`;
+    } catch (err) {
+      board.innerHTML = '';
+      const errEl = document.createElement('div');
+      errEl.className = 'board-error';
+      errEl.textContent = `Failed to load board: ${err.message}`;
+      board.appendChild(errEl);
+      meta.textContent = 'error';
+    }
+  }
+
+  // ── New Task modal ───────────────────────────────────────────────────────
+  const ntBackdrop = document.getElementById('new-task-backdrop');
+  const ntTitle    = document.getElementById('nt-title');
+  const ntLane     = document.getElementById('nt-lane');
+  const ntPriority = document.getElementById('nt-priority');
+
+  function openNewTask() {
+    ntTitle.value    = '';
+    ntLane.value     = 'backlog';
+    ntPriority.value = 'normal';
+    ntBackdrop.classList.remove('hidden');
+    ntTitle.focus();
+  }
+
+  function closeNewTask() {
+    ntBackdrop.classList.add('hidden');
+  }
+
+  async function submitNewTask() {
+    const title = ntTitle.value.trim();
+    if (!title) { ntTitle.focus(); return; }
+    try {
+      const res = await fetch('/api/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, lane: ntLane.value, priority: ntPriority.value }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Create failed:', err.error || res.status);
+      }
+    } catch (err) {
+      console.error('Create error:', err);
+    }
+    closeNewTask();
+    load();
+  }
+
+  document.getElementById('new-task-btn').addEventListener('click', openNewTask);
+  document.getElementById('new-task-close').addEventListener('click', closeNewTask);
+  document.getElementById('new-task-cancel').addEventListener('click', closeNewTask);
+  document.getElementById('new-task-submit').addEventListener('click', submitNewTask);
+  ntBackdrop.addEventListener('click', e => { if (e.target === ntBackdrop) closeNewTask(); });
+  ntTitle.addEventListener('keydown', e => { if (e.key === 'Enter') submitNewTask(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !ntBackdrop.classList.contains('hidden')) closeNewTask();
+  });
+
+  load();
+</script>
+</body>
+</html>
