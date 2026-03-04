@@ -31,6 +31,46 @@ BACKLOG (1)             READY (2)               DOING (1)               DONE (1)
                         004-Write-Tests
 ```
 
+## Tickets
+
+Tickets are plain markdown files with a small YAML frontmatter block. Drop them in the appropriate lane folder under `.kban/work/`.
+
+```markdown
+# .kban/work/ready/001-Setup-API.md
+---
+title: Setup API
+priority: high
+depends_on: []
+---
+
+## Goal
+
+Scaffold the Express app and define the base route structure.
+
+## Tasks
+
+- [ ] Initialize the project with package.json
+- [ ] Add Express and basic middleware
+- [ ] Define /health and /api/v1 routes
+```
+
+Tickets can declare dependencies on other tickets — kban will automatically promote them to `ready` once their dependencies are done:
+
+```markdown
+# .kban/work/backlog/002-Create-UI.md
+---
+title: Create UI
+priority: high
+depends_on: [001-Setup-API]
+---
+
+## Goal
+
+Build the frontend dashboard that connects to the API.
+```
+
+When `001-Setup-API` is marked done, `002-Create-UI` moves to `ready` automatically.
+
 ## Usage
 
 ```
