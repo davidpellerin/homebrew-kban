@@ -52,17 +52,17 @@ kban - Simple filesystem-based kanban board
 Usage: kban <command> [arguments]
 
 Commands:
-    version             Show kban version
-    init                Create .kban folder structure in current directory
-    agent <tool>        Scaffold an AI coding agent for this project (claude, opencode)
-    board               Show the board overview
-    list [lane]         List tickets in a lane (or all lanes)
-    show <id>           Show ticket details
-    next                Show the next actionable ticket (ready + deps met)
-    start <id>          Move ticket to doing
-    done <id>           Mark ticket as done (auto-promotes backlog tickets)
-    move <id> <lane>    Move ticket to any lane
-    serve               Start the web UI (default: http://localhost:8080)
+    version                     Show kban version
+    init                        Create .kban folder structure in current directory
+    install skill <tool>        Install a Claude Code skill for this project (claude)
+    board                       Show the board overview
+    list [lane]                 List tickets in a lane (or all lanes)
+    show <id>                   Show ticket details
+    next                        Show the next actionable ticket (ready + deps met)
+    start <id>                  Move ticket to doing
+    done <id>                   Mark ticket as done (auto-promotes backlog tickets)
+    move <id> <lane>            Move ticket to any lane
+    serve                       Start the web UI (default: http://localhost:8080)
 
 Lanes: backlog, ready, doing, done
 
@@ -374,40 +374,44 @@ cmd_done() {
     cmd_move "${1}" "done"
 }
 
-# Scaffold an AI coding agent for the current project
+# Install an agent or skill for the current project
 # Arguments:
-#   $1 - tool name (claude, opencode)
-cmd_agent() {
-    [[ $# -eq 0 ]] && die "Usage: kban agent <tool>  (supported: claude, opencode)"
-    local tool="${1}"
+#   $1 - type (agent, skill)
+#   $2 - tool name (claude, opencode)
+cmd_install() {
+    [[ $# -eq 0 ]] && die "Usage: kban install <agent|skill> <tool>"
+    local type="${1}"
+    shift
 
-    case "${tool}" in
-        claude)   cmd_agent_claude ;;
-        opencode) cmd_agent_opencode ;;
-        *) die "Unknown tool: ${tool}. Supported: claude, opencode" ;;
+    case "${type}" in
+        skill) cmd_install_skill "$@" ;;
+        *) die "Unknown install type: ${type}. Supported: skill" ;;
     esac
 }
 
-agent_claude_template() {
-    cat "${TEMPLATES_DIR}/agents/kban.md"
+# Install a Claude Code skill for the current project
+# Arguments:
+#   $1 - tool name (claude)
+cmd_install_skill() {
+    [[ $# -eq 0 ]] && die "Usage: kban install skill <tool>  (supported: claude)"
+    local tool="${1}"
+
+    case "${tool}" in
+        claude) cmd_install_skill_claude ;;
+        *) die "Unknown tool: ${tool}. Supported: claude" ;;
+    esac
 }
 
-cmd_agent_claude() {
-    local dest=".claude/agents/kban.md"
+cmd_install_skill_claude() {
+    local dest=".claude/skills/kban/SKILL.md"
     if [[ -f "${dest}" ]]; then
         log_warn "${dest} already exists — skipping"
         return 0
     fi
-    mkdir -p ".claude/agents"
-    agent_claude_template > "${dest}"
+    mkdir -p ".claude/skills/kban"
+    cat "${TEMPLATES_DIR}/skills/kban/SKILL.md" > "${dest}"
     log_success "Created ${dest}"
     log_info "Run 'kban init' first if you haven't set up the board yet"
-}
-
-cmd_agent_opencode() {
-    log_warn "OpenCode agent scaffolding is not yet supported"
-    log_info "Contributions welcome: https://github.com/davidpellerin/homebrew-kban"
-    return 1
 }
 
 # Start the web UI
@@ -433,7 +437,7 @@ main() {
     case "${cmd}" in
         version)   cmd_version ;;
         init)      cmd_init ;;
-        agent)     cmd_agent "$@" ;;
+        install)   cmd_install "$@" ;;
         board)     cmd_board ;;
         list)      cmd_list "$@" ;;
         show)      cmd_show "$@" ;;

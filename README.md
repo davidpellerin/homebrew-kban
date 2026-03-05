@@ -14,8 +14,8 @@ brew install kban
 Navigate to your project directory and run:
 
 ```bash
-kban init                # Scaffold the kanban board (.kban/work/ structure)
-kban agent claude        # Install the kban agent for Claude Code
+kban init                       # Scaffold the kanban board (.kban/work/ structure)
+kban install skill claude       # Install the kban skill for Claude Code
 ```
 
 This creates the board structure and a sample backlog ticket to get you going.
@@ -101,19 +101,22 @@ Opens a minimal browser interface at `http://localhost:8080` showing the board. 
 
 ## Sample Prompts (Claude Code)
 
-After running `kban agent claude`, try these in Claude Code:
+After running `kban install skill claude`, try these in Claude Code:
 
 ```
-using the kban agent, work through the ready queue until it's empty
+show the board
 ```
 ```
-using the kban agent, what's left to do?
+what's next?
 ```
 ```
-using the kban agent, pick up the next ticket and implement it
+start the next ticket and implement it
 ```
 ```
-using the kban agent, show me what's blocked and why
+what's blocked and why?
+```
+```
+use the kban skill to work on all tasks that are Ready and use the most appropriate agents & subagents
 ```
 
 ## License

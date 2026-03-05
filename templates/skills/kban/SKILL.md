@@ -19,7 +19,7 @@ kban start <id>            # Move ticket to doing
 kban done <id>             # Move ticket to done (auto-promotes backlog tickets)
 kban move <id> <lane>      # Move ticket to any lane
 kban serve                 # Start the web UI (default: http://localhost:8080)
-kban agent claude          # Scaffold a Claude Code sub-agent for this project
+kban install skill claude  # Install this skill into a project
 ```
 
 ## Ticket Format
