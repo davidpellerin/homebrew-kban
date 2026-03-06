@@ -28,7 +28,7 @@ def _sanitize_line(value):
 
 _template_path = os.path.join(os.path.dirname(__file__), "index.html")
 
-_TICKET_ID_RE = re.compile(r"^TASK-\d+$")
+_TICKET_ID_RE = re.compile(r"^[A-Z]+-\d+$")
 
 
 def _valid_ticket_id(ticket_id):
