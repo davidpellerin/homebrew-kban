@@ -2,6 +2,7 @@
 title: Document project setup and onboarding steps
 priority: low
 depends_on: []
+blocked: false
 ---
 
 ## Goal

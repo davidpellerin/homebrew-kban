@@ -35,7 +35,7 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 # =============================================================================
 
 # shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
-readonly KBAN_VERSION="1.0.0"
+readonly KBAN_VERSION="1.5.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
 readonly LANES=(backlog ready doing "done")
 readonly COL_WIDTH=22
@@ -61,7 +61,8 @@ Commands:
     show <id>                   Show ticket details
     next                        Show the next actionable ticket (ready + deps met)
     start <id>                  Move ticket to doing
-    done <id>                   Mark ticket as done (auto-promotes backlog tickets)
+    done <id>                   Mark ticket as done
+    promote                     Move eligible backlog tickets to ready
     move <id> <lane>            Move ticket to any lane
     block <id>                  Mark ticket as blocked
     unblock <id>                Clear blocked status from ticket
@@ -403,20 +404,6 @@ cmd_move() {
 
     mv "${path}" "${KBAN_DIR}/${target}/${id}.md"
     log_success "${id}: ${current} → ${target}"
-
-    # Auto-promote backlog tickets whose deps are now fully met
-    if [[ "${target}" == "done" ]]; then
-        local f bid
-        # shellcheck disable=SC2312
-        while IFS= read -r f; do
-            bid="$(basename "${f}" .md)"
-            # shellcheck disable=SC2310
-            if deps_met "${f}"; then
-                mv "${f}" "${KBAN_DIR}/ready/${bid}.md"
-                log_info "Auto-promoted ${bid} → ready"
-            fi
-        done < <(find "${KBAN_DIR}/backlog" -name "*.md" 2>/dev/null | sort)
-    fi
 }
 
 # Set or clear the blocked field in a ticket's frontmatter
@@ -482,6 +469,28 @@ cmd_unblock() {
     fi
     _set_blocked "${path}" "false"
     log_success "${id} unblocked"
+}
+
+# Promote eligible backlog tickets to ready
+# A ticket is eligible if all its deps are met and it is not blocked
+cmd_promote() {
+    local promoted=0
+    local f bid blocked_val
+    # shellcheck disable=SC2312
+    while IFS= read -r f; do
+        bid="$(basename "${f}" .md)"
+        blocked_val="$(get_field "${f}" "blocked")" || blocked_val=""
+        # shellcheck disable=SC2310
+        if deps_met "${f}" && [[ "$(echo "${blocked_val}" | tr '[:upper:]' '[:lower:]')" != "true" ]]; then
+            mv "${f}" "${KBAN_DIR}/ready/${bid}.md"
+            log_success "${bid}: backlog → ready"
+            ((promoted++)) || true
+        fi
+    done < <(find "${KBAN_DIR}/backlog" -name "*.md" 2>/dev/null | sort)
+
+    if [[ "${promoted}" -eq 0 ]]; then
+        log_warn "No eligible tickets to promote"
+    fi
 }
 
 # Move ticket to doing
@@ -597,6 +606,7 @@ main() {
         start)     cmd_start "$@" ;;
         "done")    cmd_done "$@" ;;
         move)      cmd_move "$@" ;;
+        promote)   cmd_promote ;;
         block)     cmd_block "$@" ;;
         unblock)   cmd_unblock "$@" ;;
         tickets)   cmd_tickets "$@" ;;

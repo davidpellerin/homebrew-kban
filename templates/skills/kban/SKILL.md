@@ -16,8 +16,12 @@ kban list [lane]           # List tickets in a lane, or all lanes
 kban show <id>             # Show full ticket details (frontmatter + body)
 kban next                  # Print the id of the next actionable ready ticket
 kban start <id>            # Move ticket to doing
-kban done <id>             # Move ticket to done (auto-promotes backlog tickets)
+kban done <id>             # Move ticket to done
+kban promote               # Move eligible backlog tickets to ready (deps met + not blocked)
 kban move <id> <lane>      # Move ticket to any lane
+kban block <id>            # Mark ticket as blocked
+kban unblock <id>          # Clear blocked status from ticket
+kban tickets [lane]        # Flat list of all tickets with lane/priority/deps
 kban serve                 # Start the web UI (default: http://localhost:8080)
 kban install skill claude  # Install this skill into a project
 ```
@@ -31,6 +35,7 @@ Tickets are Markdown files with YAML frontmatter:
 title: Short description of the work
 priority: high|medium|low
 depends_on: [TICKET-001, TICKET-002]
+blocked: false
 ---
 
 ## Goal
@@ -45,10 +50,11 @@ What needs to be accomplished.
 
 Ticket IDs come from the filename (e.g., `FEAT-001.md` → ID is `FEAT-001`).
 
-## Dependency Rules
+## Dependency and Blocked Rules
 
 - `depends_on: []` means no dependencies — ticket can go straight to `ready`.
-- When `kban done <id>` is run, any backlog tickets whose `depends_on` are all in `done` are automatically promoted to `ready`.
+- `blocked: true` prevents a ticket from being promoted to `ready` via `kban promote`.
+- `kban promote` moves all backlog tickets whose deps are all in `done` and are not blocked into `ready`. Run this manually after completing work to surface newly eligible tickets.
 - `kban next` returns the first `ready` ticket whose dependencies are all met.
 
 ## Typical Workflow
@@ -59,7 +65,8 @@ kban next           # Get next actionable ticket id
 kban show <id>      # Read the ticket
 kban start <id>     # Move to doing
 # ... do the work ...
-kban done <id>      # Mark done, auto-promotes unblocked backlog tickets
+kban done <id>      # Mark done
+kban promote        # Promote any newly eligible backlog tickets to ready
 ```
 
 ## Creating Tickets
@@ -76,6 +83,7 @@ Example file content for `.kban/work/ready/FEAT-009.md`:
 title: Add dark mode toggle
 priority: medium
 depends_on: []
+blocked: false
 ---
 
 ## Goal
