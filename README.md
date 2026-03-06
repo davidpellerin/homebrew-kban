@@ -99,7 +99,7 @@ blocked: true
 ---
 ```
 
-Tickets can also declare dependencies on other tickets — kban will automatically promote them to `ready` once their dependencies are done:
+Tickets can also declare dependencies on other tickets:
 
 ```markdown
 # .kban/work/backlog/002-Create-UI.md
@@ -113,8 +113,6 @@ depends_on: [001-Setup-API]
 
 Build the frontend dashboard that connects to the API.
 ```
-
-When `001-Setup-API` is marked done, `002-Create-UI` moves to `ready` automatically.
 
 
 ### Screenshots
