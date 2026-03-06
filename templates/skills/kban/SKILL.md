@@ -62,13 +62,16 @@ kban start <id>     # Move to doing
 kban done <id>      # Mark done, auto-promotes unblocked backlog tickets
 ```
 
-## Creating Tickets Manually
+## Creating Tickets
 
-To add a new ticket, write a `.md` file directly into the appropriate lane directory:
+**There is no `kban create` command.** To create a ticket, write a `.md` file directly into the appropriate lane directory using the `Write` tool:
 
-```bash
-# Example: create a ready ticket
-cat > .kban/work/ready/FEAT-002.md <<'EOF'
+- Determine the next available ID by listing the lane directory (e.g., `ls .kban/work/ready/`)
+- Write the file to `.kban/work/<lane>/<ID>.md`
+
+Example file content for `.kban/work/ready/FEAT-009.md`:
+
+```markdown
 ---
 title: Add dark mode toggle
 priority: medium
@@ -83,8 +86,9 @@ Add a dark/light mode toggle to the settings page.
 
 - [ ] Add toggle component
 - [ ] Persist preference to localStorage
-EOF
 ```
+
+Verify creation with `kban show <ID>` after writing the file.
 
 ## Environment Variables (for `kban serve`)
 

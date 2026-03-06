@@ -54,7 +54,18 @@ Scaffold the Express app and define the base route structure.
 - [ ] Define /health and /api/v1 routes
 ```
 
-Tickets can declare dependencies on other tickets — kban will automatically promote them to `ready` once their dependencies are done:
+Tickets support a `blocked` field to indicate work stalled on an external dependency. Blocked tickets are highlighted in red in the web UI and tagged `[BLOCKED]` in CLI output:
+
+```markdown
+---
+title: Integrate Payment API
+priority: high
+depends_on: []
+blocked: true
+---
+```
+
+Tickets can also declare dependencies on other tickets — kban will automatically promote them to `ready` once their dependencies are done:
 
 ```markdown
 # .kban/work/backlog/002-Create-UI.md

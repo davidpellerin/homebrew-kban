@@ -75,7 +75,6 @@
     .column {
       flex: 1;
       min-width: 220px;
-      max-width: 320px;
       display: flex;
       flex-direction: column;
       background: var(--bg);
@@ -200,6 +199,28 @@
     .priority[data-p="urgent"] { color: var(--red); }
     .priority[data-p="urgent"] .priority-dot { background: var(--red); }
 
+    /* ── Blocked badge ──────────────────────────────────────────────────── */
+    .blocked-badge {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: var(--red);
+      background: color-mix(in srgb, var(--red) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card.is-blocked {
+      border-color: color-mix(in srgb, var(--red) 35%, transparent);
+    }
+
+    .card.is-blocked:hover {
+      border-color: color-mix(in srgb, var(--red) 60%, transparent);
+    }
+
     /* ── Deps badge ─────────────────────────────────────────────────────── */
     .deps-badge {
       font-size: 0.6rem;
@@ -232,7 +253,7 @@
       border-top: 3px solid var(--lane-color, var(--border));
       border-radius: 10px;
       width: 100%;
-      max-width: 560px;
+      max-width: 680px;
       max-height: 85vh;
       display: flex;
       flex-direction: column;
@@ -329,6 +350,59 @@
       animation: shimmer 1.6s ease-in-out infinite;
     }
 
+    /* ── Search bar ─────────────────────────────────────────────────────── */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .search-input {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+      width: 180px;
+      outline: none;
+      transition: border-color 0.15s, width 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--blue);
+      width: 240px;
+    }
+
+    .search-input::placeholder { color: var(--text-muted); }
+
+    .priority-filter {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.5rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .priority-filter:focus { border-color: var(--blue); }
+    .priority-filter option { background: var(--bg-tertiary); }
+
+    /* ── Search highlight ───────────────────────────────────────────────── */
+    mark {
+      background: color-mix(in srgb, var(--yellow) 35%, transparent);
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    .card.filtered-out { display: none; }
+
     /* ── New Task button ────────────────────────────────────────────────── */
     .btn-new-task {
       display: flex;
@@ -376,7 +450,8 @@
 
     .form-input:is(textarea) {
       resize: vertical;
-      min-height: 6rem;
+      min-height: 7rem;
+      overflow-y: hidden;
     }
 
     .form-input,
@@ -437,6 +512,21 @@
       font-weight: 600;
     }
 
+    /* ── Blocked checkbox ───────────────────────────────────────────────── */
+    .form-check {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-checkbox {
+      accent-color: var(--red);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
     /* ── Drag and drop ──────────────────────────────────────────────────── */
     .card[draggable="true"] {
       cursor: grab;
@@ -459,6 +549,16 @@
 
 <header>
   <span class="logo">kban</span>
+  <div class="search-bar">
+    <input class="search-input" id="search-input" type="search" placeholder="Search tickets…" autocomplete="off" aria-label="Search tickets">
+    <select class="priority-filter" id="priority-filter" aria-label="Filter by priority">
+      <option value="">All priorities</option>
+      <option value="urgent">Urgent</option>
+      <option value="high">High</option>
+      <option value="normal">Normal</option>
+      <option value="low">Low</option>
+    </select>
+  </div>
   <span class="header-meta" id="meta">loading…</span>
   <button class="btn-new-task" id="new-task-btn" aria-label="New task">
     <span class="plus">+</span> New Task
@@ -557,6 +657,10 @@
           <option value="urgent">Urgent</option>
         </select>
       </div>
+      <div class="form-group form-check">
+        <input type="checkbox" class="form-checkbox" id="et-blocked">
+        <label class="form-label" for="et-blocked">Blocked</label>
+      </div>
       <div class="form-group">
         <label class="form-label" for="et-body">Description</label>
         <textarea class="form-input" id="et-body" rows="6" placeholder="Optional description…"></textarea>
@@ -571,6 +675,11 @@
 </div>
 
 <script>
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
   const LANES = [
     { id: 'backlog', label: 'Backlog' },
     { id: 'ready',   label: 'Ready' },
@@ -604,10 +713,16 @@
     document.getElementById('modal-id').textContent    = ticket.id;
     document.getElementById('modal-title').textContent = ticket.title;
 
-    // meta row: priority + deps
+    // meta row: priority + blocked + deps
     const meta = document.getElementById('modal-meta');
     meta.innerHTML = '';
     meta.appendChild(priorityEl(ticket.priority));
+    if (ticket.blocked) {
+      const badge = document.createElement('span');
+      badge.className = 'blocked-badge';
+      badge.textContent = 'blocked';
+      meta.appendChild(badge);
+    }
     if (ticket.depends_on && ticket.depends_on.length > 0) {
       const deps = document.createElement('span');
       deps.className = 'deps-badge';
@@ -635,11 +750,14 @@
 
   function openEditMode() {
     const t = currentTicketObj;
-    document.getElementById('et-title').value    = t.title;
-    document.getElementById('et-priority').value = t.priority || 'normal';
-    document.getElementById('et-lane').value     = currentLaneId;
-    document.getElementById('et-body').value     = t.body || '';
+    document.getElementById('et-title').value      = t.title;
+    document.getElementById('et-priority').value   = t.priority || 'normal';
+    document.getElementById('et-lane').value       = currentLaneId;
+    document.getElementById('et-blocked').checked  = t.blocked || false;
+    const etBody = document.getElementById('et-body');
+    etBody.value = t.body || '';
     setEditMode(true);
+    autoGrow(etBody);
     document.getElementById('et-title').focus();
   }
 
@@ -649,6 +767,9 @@
     if (e.key === 'Escape' && !backdrop.classList.contains('hidden')) closeModal();
   });
 
+  document.getElementById('et-body').addEventListener('input', function() { autoGrow(this); });
+  document.getElementById('nt-body').addEventListener('input', function() { autoGrow(this); });
+
   document.getElementById('modal-edit').addEventListener('click', openEditMode);
   document.getElementById('modal-edit-cancel').addEventListener('click', closeModal);
 
@@ -656,13 +777,14 @@
     const title    = document.getElementById('et-title').value.trim();
     const priority = document.getElementById('et-priority').value;
     const lane     = document.getElementById('et-lane').value;
+    const blocked  = document.getElementById('et-blocked').checked;
     const body     = document.getElementById('et-body').value.trim();
     if (!title) { document.getElementById('et-title').focus(); return; }
     try {
       const res = await fetch('/api/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: currentTicketId, title, priority, lane, body }),
+        body: JSON.stringify({ id: currentTicketId, title, priority, lane, blocked, body }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -750,11 +872,18 @@
     title.textContent = ticket.title;
     card.appendChild(title);
 
+    if (ticket.blocked) card.classList.add('is-blocked');
+
     const footer = document.createElement('div');
     footer.className = 'card-footer';
     footer.appendChild(priorityEl(ticket.priority));
 
-    if (ticket.depends_on && ticket.depends_on.length > 0) {
+    if (ticket.blocked) {
+      const badge = document.createElement('span');
+      badge.className = 'blocked-badge';
+      badge.textContent = 'blocked';
+      footer.appendChild(badge);
+    } else if (ticket.depends_on && ticket.depends_on.length > 0) {
       const deps = document.createElement('span');
       deps.className = 'deps-badge';
       deps.textContent = `deps: ${ticket.depends_on.join(', ')}`;
@@ -909,8 +1038,75 @@
     if (e.key === 'Escape' && !ntBackdrop.classList.contains('hidden')) closeNewTask();
   });
 
-  load();
-  setInterval(load, 3000);
+  // ── Search / filter ──────────────────────────────────────────────────────
+  const searchInput    = document.getElementById('search-input');
+  const priorityFilter = document.getElementById('priority-filter');
+
+  function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function highlightText(el, query) {
+    const text = el.dataset.rawText || el.textContent;
+    el.dataset.rawText = text;
+    if (!query) { el.textContent = text; return; }
+    const re = new RegExp(`(${escapeRe(query)})`, 'gi');
+    el.innerHTML = text.replace(re, '<mark>$1</mark>');
+  }
+
+  function applyFilter() {
+    const query    = searchInput.value.trim().toLowerCase();
+    const priority = priorityFilter.value;
+    const board    = document.getElementById('board');
+    board.querySelectorAll('.card').forEach(card => {
+      const titleEl  = card.querySelector('.card-title');
+      const idEl     = card.querySelector('.card-id');
+      const cardPrio = card.dataset.priority || '';
+      const titleText = (titleEl.dataset.rawText || titleEl.textContent).toLowerCase();
+      const idText    = (idEl.dataset.rawText   || idEl.textContent).toLowerCase();
+
+      const matchesQuery    = !query    || titleText.includes(query) || idText.includes(query);
+      const matchesPriority = !priority || cardPrio === priority;
+
+      card.classList.toggle('filtered-out', !matchesQuery || !matchesPriority);
+      highlightText(titleEl, query);
+    });
+
+    // Update empty-state per column
+    board.querySelectorAll('.column').forEach(col => {
+      const body    = col.querySelector('.column-body');
+      const visible = [...body.querySelectorAll('.card')].filter(c => !c.classList.contains('filtered-out'));
+      let empty = body.querySelector('.column-empty-filter');
+      if (visible.length === 0 && body.querySelectorAll('.card').length > 0) {
+        if (!empty) {
+          empty = document.createElement('div');
+          empty.className = 'column-empty column-empty-filter';
+          empty.textContent = 'no matches';
+          body.appendChild(empty);
+        }
+      } else if (empty) {
+        empty.remove();
+      }
+    });
+  }
+
+  searchInput.addEventListener('input', applyFilter);
+  priorityFilter.addEventListener('change', applyFilter);
+
+  // Re-apply filter after each load
+  const _origLoad = load;
+  async function loadAndFilter() {
+    await _origLoad();
+    // tag cards with priority for filtering
+    document.getElementById('board').querySelectorAll('.card').forEach(card => {
+      const prio = card.querySelector('.priority');
+      if (prio) card.dataset.priority = prio.dataset.p || '';
+    });
+    applyFilter();
+  }
+
+  loadAndFilter();
+  setInterval(loadAndFilter, 3000);
 </script>
 </body>
 </html>

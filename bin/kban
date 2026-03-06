@@ -54,7 +54,8 @@ Usage: kban <command> [arguments]
 Commands:
     version                     Show kban version
     init                        Create .kban folder structure in current directory
-    install skill <tool>        Install a Claude Code skill for this project (claude)
+    install skill user          Install Claude Code skill for your user account (all projects)
+    install skill project       Install Claude Code skill for this project only
     board                       Show the board overview
     list [lane]                 List tickets in a lane (or all lanes)
     show <id>                   Show ticket details
@@ -62,6 +63,9 @@ Commands:
     start <id>                  Move ticket to doing
     done <id>                   Mark ticket as done (auto-promotes backlog tickets)
     move <id> <lane>            Move ticket to any lane
+    block <id>                  Mark ticket as blocked
+    unblock <id>                Clear blocked status from ticket
+    tickets [lane]              Flat list of all tickets with lane/priority/deps
     serve                       Start the web UI (default: http://localhost:8080)
 
 Lanes: backlog, ready, doing, done
@@ -260,15 +264,72 @@ cmd_list() {
                     echo -e "${YELLOW}[${lane_name}]${NC}"
                     has_tickets=true
                 fi
-                basename "${f}" .md
+                local tid blocked_val suffix
+                tid="$(basename "${f}" .md)"
+                blocked_val="$(get_field "${f}" "blocked")" || blocked_val="" || blocked_val=""
+                suffix=""
+                [[ "$(echo "${blocked_val}" | tr '[:upper:]' '[:lower:]')" == "true" ]] && suffix=" ${RED}[BLOCKED]${NC}"
+                echo -e "${tid}${suffix}"
             done < <(find "${KBAN_DIR}/${lane_name}" -name "*.md" 2>/dev/null | sort)
         done
     else
         # shellcheck disable=SC2312
         while IFS= read -r f; do
-            basename "${f}" .md
+            local tid blocked_val suffix
+            tid="$(basename "${f}" .md)"
+            blocked_val="$(get_field "${f}" "blocked")" || blocked_val=""
+            suffix=""
+            [[ "$(echo "${blocked_val}" | tr '[:upper:]' '[:lower:]')" == "true" ]] && suffix=" ${RED}[BLOCKED]${NC}"
+            echo -e "${tid}${suffix}"
         done < <(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | sort)
     fi
+}
+
+# Flat list view of all tickets (or filtered by lane)
+# Arguments:
+#   $1 - lane name (optional, default: all lanes)
+cmd_tickets() {
+    local filter_lane="${1:-}"
+    local lanes_to_show=()
+
+    if [[ -n "${filter_lane}" ]]; then
+        local valid=false
+        local l
+        for l in "${LANES[@]}"; do
+            [[ "${l}" == "${filter_lane}" ]] && valid=true
+        done
+        [[ "${valid}" == "false" ]] && die "Invalid lane: ${filter_lane}. Valid: ${LANES[*]}"
+        lanes_to_show=("${filter_lane}")
+    else
+        lanes_to_show=("${LANES[@]}")
+    fi
+
+    # Column widths
+    local id_w=14 lane_w=9 prio_w=8
+
+    # shellcheck disable=SC2154
+    printf "${BLUE}%-${id_w}s  %-${lane_w}s  %-${prio_w}s  %s${NC}\n" "ID" "LANE" "PRIORITY" "TITLE"
+    printf '%s\n' "$(printf '%.0s─' {1..70})"
+
+    local lane f tid title priority deps blocked_val row_suffix
+    for lane in "${lanes_to_show[@]}"; do
+        # shellcheck disable=SC2312
+        while IFS= read -r f; do
+            tid="$(basename "${f}" .md)"
+            title="$(get_field "${f}" "title")"
+            priority="$(get_field "${f}" "priority")"
+            deps="$(get_field "${f}" "depends_on")"
+            blocked_val="$(get_field "${f}" "blocked")" || blocked_val=""
+
+            row_suffix=""
+            [[ -n "${deps}" && "${deps}" != "[]" ]] && row_suffix=" ${BLUE}[deps: ${deps}]${NC}"
+            [[ "$(echo "${blocked_val}" | tr '[:upper:]' '[:lower:]')" == "true" ]] && row_suffix=" ${RED}[BLOCKED]${NC}"
+
+            printf "%-${id_w}s  %-${lane_w}s  %-${prio_w}s  %s" \
+                "${tid}" "${lane}" "${priority:-normal}" "${title:-${tid}}"
+            echo -e "${row_suffix}"
+        done < <(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | sort)
+    done
 }
 
 # Show ticket details
@@ -358,6 +419,71 @@ cmd_move() {
     fi
 }
 
+# Set or clear the blocked field in a ticket's frontmatter
+# Arguments:
+#   $1 - ticket file path
+#   $2 - "true" to block, "false" to unblock
+_set_blocked() {
+    local file="${1}"
+    local value="${2}"
+    local tmp
+    tmp="$(mktemp)"
+
+    if [[ "${value}" == "true" ]]; then
+        # Add or update `blocked: true` inside the frontmatter
+        awk '
+            BEGIN { fm=0; done=0 }
+            /^---$/ && fm==0 { fm=1; print; next }
+            /^---$/ && fm==1 {
+                if (!done) { print "blocked: true"; done=1 }
+                fm=2; print; next
+            }
+            fm==1 && /^blocked:/ { print "blocked: true"; done=1; next }
+            { print }
+        ' "${file}" > "${tmp}"
+    else
+        # Remove `blocked:` line from frontmatter
+        awk '
+            BEGIN { fm=0 }
+            /^---$/ && fm==0 { fm=1; print; next }
+            /^---$/ && fm==1 { fm=2; print; next }
+            fm==1 && /^blocked:/ { next }
+            { print }
+        ' "${file}" > "${tmp}"
+    fi
+    mv "${tmp}" "${file}"
+}
+
+# Mark a ticket as blocked
+# Arguments:
+#   $1 - ticket id
+cmd_block() {
+    [[ $# -eq 0 ]] && die "Usage: kban block <id>"
+    local id="${1}"
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    _set_blocked "${path}" "true"
+    log_success "${id} marked as blocked"
+}
+
+# Clear blocked status from a ticket
+# Arguments:
+#   $1 - ticket id
+cmd_unblock() {
+    [[ $# -eq 0 ]] && die "Usage: kban unblock <id>"
+    local id="${1}"
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    _set_blocked "${path}" "false"
+    log_success "${id} unblocked"
+}
+
 # Move ticket to doing
 # Arguments:
 #   $1 - ticket id
@@ -392,25 +518,51 @@ cmd_install() {
 # Install a Claude Code skill for the current project
 # Arguments:
 #   $1 - tool name (claude)
+#   $2 - scope (user|project)
 cmd_install_skill() {
-    [[ $# -eq 0 ]] && die "Usage: kban install skill <tool>  (supported: claude)"
+    [[ $# -eq 0 ]] && die "Usage: kban install skill user|project"
     local tool="${1}"
+    shift
 
     case "${tool}" in
-        claude) cmd_install_skill_claude ;;
+        claude) cmd_install_skill_claude "$@" ;;
         *) die "Unknown tool: ${tool}. Supported: claude" ;;
     esac
 }
 
 cmd_install_skill_claude() {
-    local dest=".claude/skills/kban/SKILL.md"
+    local scope="${1:-}"
+
+    # Prompt if scope not specified
+    if [[ -z "${scope}" ]]; then
+        echo "Where do you want to install the kban skill?"
+        echo "  [1] user     → ${HOME}/.claude/skills/kban/ (available in all projects)"
+        echo "  [2] project  → ./.claude/skills/kban/ (this project only)"
+        printf "Choose [1/2]: "
+        local choice
+        read -r choice
+        case "${choice}" in
+            1|user)    scope="user" ;;
+            2|project) scope="project" ;;
+            *) die "Invalid choice: ${choice}. Enter 1 or 2." ;;
+        esac
+    fi
+
+    local dest_dir
+    case "${scope}" in
+        user)    dest_dir="${HOME}/.claude/skills/kban" ;;
+        project) dest_dir=".claude/skills/kban" ;;
+        *) die "Invalid scope: ${scope}. Use 'user' or 'project'." ;;
+    esac
+
+    local dest="${dest_dir}/SKILL.md"
     if [[ -f "${dest}" ]]; then
         log_warn "${dest} already exists — skipping"
         return 0
     fi
-    mkdir -p ".claude/skills/kban"
+    mkdir -p "${dest_dir}"
     cat "${TEMPLATES_DIR}/skills/kban/SKILL.md" > "${dest}"
-    log_success "Created ${dest}"
+    log_success "Installed kban skill → ${dest}"
     log_info "Run 'kban init' first if you haven't set up the board yet"
 }
 
@@ -445,6 +597,9 @@ main() {
         start)     cmd_start "$@" ;;
         "done")    cmd_done "$@" ;;
         move)      cmd_move "$@" ;;
+        block)     cmd_block "$@" ;;
+        unblock)   cmd_unblock "$@" ;;
+        tickets)   cmd_tickets "$@" ;;
         serve)     cmd_serve ;;
         -h|--help) usage ;;
         *) die "Unknown command: ${cmd}. Use 'kban --help' for usage." ;;
