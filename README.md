@@ -85,18 +85,32 @@ When `001-Setup-API` is marked done, `002-Create-UI` moves to `ready` automatica
 ## Usage
 
 ```
-kban version             # Show kban version
-kban board               # Show the board overview
-kban list [lane]         # List tickets in a lane (or all lanes)
-kban show <id>           # Show ticket details
-kban next                # Show the next actionable ticket (ready + deps met)
-kban start <id>          # Move ticket to doing
-kban done <id>           # Mark ticket as done (auto-promotes backlog tickets)
-kban move <id> <lane>    # Move ticket to any lane
-kban serve               # Start the web UI at http://localhost:8080
-```
+kban - Simple filesystem-based kanban board
 
-Lanes: `backlog`, `ready`, `doing`, `done`
+Usage: kban <command> [arguments]
+
+Commands:
+    version                     Show kban version
+    init                        Create .kban folder structure in current directory
+    install skill user          Install Claude Code skill for your user account (all projects)
+    install skill project       Install Claude Code skill for this project only
+    board                       Show the board overview
+    list [lane]                 List tickets in a lane (or all lanes)
+    show <id>                   Show ticket details
+    next                        Show the next actionable ticket (ready + deps met)
+    start <id>                  Move ticket to doing
+    done <id>                   Mark ticket as done
+    promote                     Move eligible backlog tickets to ready
+    move <id> <lane>            Move ticket to any lane
+    block <id>                  Mark ticket as blocked
+    unblock <id>                Clear blocked status from ticket
+    archive <id>                Move ticket to archive (hidden from board)
+    unarchive <id>              Restore ticket from archive to done
+    tickets [lane]              Flat list of all tickets with lane/priority/deps
+    serve                       Start the web UI (default: http://localhost:8080)
+
+Lanes: backlog, ready, doing, done, archive
+```
 
 ### Screenshots
 
