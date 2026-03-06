@@ -20,6 +20,36 @@ kban install skill claude       # Install the kban skill for Claude Code
 
 This creates the board structure and a sample backlog ticket to get you going.
 
+## Usage
+
+```
+kban - Simple filesystem-based kanban board
+
+Usage: kban <command> [arguments]
+
+Commands:
+    version                     Show kban version
+    init                        Create .kban folder structure in current directory
+    install skill user          Install Claude Code skill for your user account (all projects)
+    install skill project       Install Claude Code skill for this project only
+    board                       Show the board overview
+    list [lane]                 List tickets in a lane (or all lanes)
+    show <id>                   Show ticket details
+    next                        Show the next actionable ticket (ready + deps met)
+    start <id>                  Move ticket to doing
+    done <id>                   Mark ticket as done
+    promote                     Move eligible backlog tickets to ready
+    move <id> <lane>            Move ticket to any lane
+    block <id>                  Mark ticket as blocked
+    unblock <id>                Clear blocked status from ticket
+    archive <id>                Move ticket to archive (hidden from board)
+    unarchive <id>              Restore ticket from archive to done
+    tickets [lane]              Flat list of all tickets with lane/priority/deps
+    serve                       Start the web UI (default: http://localhost:8080)
+
+Lanes: backlog, ready, doing, done, archive
+```
+
 ## Example
 
 ```
@@ -82,35 +112,6 @@ Build the frontend dashboard that connects to the API.
 
 When `001-Setup-API` is marked done, `002-Create-UI` moves to `ready` automatically.
 
-## Usage
-
-```
-kban - Simple filesystem-based kanban board
-
-Usage: kban <command> [arguments]
-
-Commands:
-    version                     Show kban version
-    init                        Create .kban folder structure in current directory
-    install skill user          Install Claude Code skill for your user account (all projects)
-    install skill project       Install Claude Code skill for this project only
-    board                       Show the board overview
-    list [lane]                 List tickets in a lane (or all lanes)
-    show <id>                   Show ticket details
-    next                        Show the next actionable ticket (ready + deps met)
-    start <id>                  Move ticket to doing
-    done <id>                   Mark ticket as done
-    promote                     Move eligible backlog tickets to ready
-    move <id> <lane>            Move ticket to any lane
-    block <id>                  Mark ticket as blocked
-    unblock <id>                Clear blocked status from ticket
-    archive <id>                Move ticket to archive (hidden from board)
-    unarchive <id>              Restore ticket from archive to done
-    tickets [lane]              Flat list of all tickets with lane/priority/deps
-    serve                       Start the web UI (default: http://localhost:8080)
-
-Lanes: backlog, ready, doing, done, archive
-```
 
 ### Screenshots
 
@@ -127,10 +128,9 @@ Lanes: backlog, ready, doing, done, archive
 ![kban archive](images/kban-archive.png)
 
 
+## Sample Prompts
 
-## Sample Prompts (Claude Code)
-
-After running `kban install skill claude`, try these in Claude Code:
+After running `kban install skill claude`, try these prompts:
 
 ```
 show the board
