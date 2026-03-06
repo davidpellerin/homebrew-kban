@@ -18,6 +18,14 @@ PORT = int(os.environ.get("KBAN_PORT", "8080"))
 
 LANES = ["backlog", "ready", "doing", "done"]
 ARCHIVE_LANE = "archive"
+
+
+def is_valid_ticket_id(ticket_id: str) -> bool:
+    """
+    Validate that the ticket ID is a simple, safe identifier that can be used
+    as a single filename component.
+    """
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]+", ticket_id))
 ALL_LANES = LANES + [ARCHIVE_LANE]
 
 _template_path = os.path.join(os.path.dirname(__file__), "index.html")
@@ -383,6 +391,10 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
 
             if not ticket_id:
                 self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            if not is_valid_ticket_id(ticket_id):
+                self.send_json({"error": "invalid ticket id"}, HTTPStatus.BAD_REQUEST)
                 return
 
             kban_dir = _kban_dir()
