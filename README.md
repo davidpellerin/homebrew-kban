@@ -6,6 +6,7 @@ Homebrew tap for [kban](https://github.com/davidpellerin/homebrew-kban) — a si
 
 ```bash
 brew tap davidpellerin/kban
+
 brew install kban
 ```
 
@@ -14,11 +15,14 @@ brew install kban
 Navigate to your project directory and run:
 
 ```bash
-kban init                       # Scaffold the kanban board (.kban/work/ structure)
-kban install skill claude       # Install the kban skill for Claude Code
+$ cd myproject
+
+$ kban init                       # Scaffold the kanban board (.kban/work/ structure)
+
+$ kban install skill project      # Install the kban skill for this project
 ```
 
-This creates the board structure and a sample backlog ticket to get you going.
+This creates the board structure, a sample backlog ticket, and a the `/kban` skill for Claude Code.
 
 ## Usage
 
