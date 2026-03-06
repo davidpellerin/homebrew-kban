@@ -527,6 +527,137 @@
       flex-shrink: 0;
     }
 
+    /* ── View toggle tabs ───────────────────────────────────────────────── */
+    .view-toggle {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.2rem;
+    }
+
+    .view-tab {
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.25rem 0.75rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: none;
+      color: var(--text-muted);
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .view-tab:hover { color: var(--text); }
+
+    .view-tab.active {
+      background: var(--bg-secondary);
+      color: var(--text);
+    }
+
+    /* ── Archive view ───────────────────────────────────────────────────── */
+    .archive-view {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .archive-header {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 0.25rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.5rem;
+    }
+
+    .archive-empty {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 3rem 1rem;
+      opacity: 0.6;
+    }
+
+    .archive-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+      border-radius: 8px;
+      padding: 0.625rem 0.875rem;
+      cursor: pointer;
+    }
+
+    .archive-row:hover {
+      border-color: var(--border);
+      background: color-mix(in srgb, var(--bg-secondary) 80%, var(--accent) 20%);
+    }
+
+    .archive-row-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .archive-row-id {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.2rem;
+    }
+
+    .archive-row-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .archive-row-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+
+    .btn-restore {
+      background: color-mix(in srgb, var(--green) 15%, transparent);
+      border-color: color-mix(in srgb, var(--green) 40%, transparent);
+      color: var(--green);
+    }
+
+    .btn-restore:hover {
+      background: color-mix(in srgb, var(--green) 25%, transparent);
+      opacity: 1;
+    }
+
+    .btn-archive {
+      background: color-mix(in srgb, var(--yellow) 12%, transparent);
+      border-color: color-mix(in srgb, var(--yellow) 35%, transparent);
+      color: var(--yellow);
+    }
+
+    .btn-archive:hover {
+      background: color-mix(in srgb, var(--yellow) 22%, transparent);
+      opacity: 1;
+    }
+
+    .btn-view {
+      background: color-mix(in srgb, var(--blue) 12%, transparent);
+      border-color: color-mix(in srgb, var(--blue) 35%, transparent);
+      color: var(--blue);
+    }
+
+    .btn-view:hover {
+      background: color-mix(in srgb, var(--blue) 22%, transparent);
+      opacity: 1;
+    }
+
     /* ── Drag and drop ──────────────────────────────────────────────────── */
     .card[draggable="true"] {
       cursor: grab;
@@ -548,8 +679,12 @@
 <body>
 
 <header>
-  <span class="logo">kban</span>
-  <div class="search-bar">
+  <span class="logo" style="cursor:pointer" onclick="loadAndFilter()" title="Refresh">kban</span>
+  <div class="view-toggle">
+    <button class="view-tab active" id="tab-board" onclick="switchView('board')">Board</button>
+    <button class="view-tab" id="tab-archive" onclick="switchView('archive')">Archive</button>
+  </div>
+  <div class="search-bar" id="search-bar">
     <input class="search-input" id="search-input" type="search" placeholder="Search tickets…" autocomplete="off" aria-label="Search tickets">
     <select class="priority-filter" id="priority-filter" aria-label="Filter by priority">
       <option value="">All priorities</option>
@@ -566,6 +701,10 @@
 </header>
 
 <div class="board" id="board">
+  <!-- populated by JS -->
+</div>
+
+<div class="archive-view hidden" id="archive-view">
   <!-- populated by JS -->
 </div>
 
@@ -668,6 +807,7 @@
     </div>
     <div class="form-footer hidden" id="modal-edit-footer">
       <button class="btn btn-danger" id="modal-delete" style="margin-right: auto;">Delete</button>
+      <button class="btn btn-archive" id="modal-archive">Archive</button>
       <button class="btn btn-ghost" id="modal-edit-cancel">Cancel</button>
       <button class="btn btn-primary" id="modal-edit-save">Save</button>
     </div>
@@ -690,6 +830,24 @@
   // lane → ticket[]
   const boardData = {};
 
+  // ── View toggle ──────────────────────────────────────────────────────────
+  let currentView = 'board';
+
+  function switchView(view) {
+    currentView = view;
+    document.getElementById('tab-board').classList.toggle('active', view === 'board');
+    document.getElementById('tab-archive').classList.toggle('active', view === 'archive');
+    document.getElementById('board').classList.toggle('hidden', view !== 'board');
+    document.getElementById('archive-view').classList.toggle('hidden', view !== 'archive');
+    document.getElementById('search-bar').classList.toggle('hidden', view !== 'board');
+    document.getElementById('new-task-btn').classList.toggle('hidden', view !== 'board');
+    if (view === 'archive') {
+      loadArchive();
+    } else {
+      loadAndFilter();
+    }
+  }
+
   // ── Modal ────────────────────────────────────────────────────────────────
   const backdrop = document.getElementById('modal-backdrop');
   const modal    = document.getElementById('modal');
@@ -705,7 +863,7 @@
     document.getElementById('modal-edit-footer').classList.toggle('hidden', !on);
   }
 
-  function openModal(ticket, laneId) {
+  function openModal(ticket, laneId, readOnly = false) {
     currentTicketId  = ticket.id;
     currentTicketObj = ticket;
     currentLaneId    = laneId;
@@ -740,12 +898,18 @@
     }
 
     backdrop.classList.remove('hidden');
-    openEditMode();
+    if (readOnly) {
+      setEditMode(false);
+      document.getElementById('modal-view-footer').classList.add('hidden');
+    } else {
+      openEditMode();
+    }
   }
 
   function closeModal() {
     backdrop.classList.add('hidden');
     setEditMode(false);
+    document.getElementById('modal-view-footer').classList.remove('hidden');
   }
 
   function openEditMode() {
@@ -815,6 +979,27 @@
       }
     } catch (err) {
       console.error('Delete error:', err);
+      return;
+    }
+    closeModal();
+    load();
+  });
+
+  document.getElementById('modal-archive').addEventListener('click', async () => {
+    if (!currentTicketId) return;
+    try {
+      const res = await fetch('/api/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentTicketId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Archive failed:', err.error || res.status);
+        return;
+      }
+    } catch (err) {
+      console.error('Archive error:', err);
       return;
     }
     closeModal();
@@ -958,6 +1143,111 @@
 
     col.appendChild(body);
     return col;
+  }
+
+  async function loadArchive() {
+    const archiveView = document.getElementById('archive-view');
+    const meta = document.getElementById('meta');
+    try {
+      const res = await fetch('/api/archive');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const tickets = await res.json();
+
+      archiveView.innerHTML = '';
+      const hdr = document.createElement('div');
+      hdr.className = 'archive-header';
+      hdr.textContent = `Archive (${tickets.length} ticket${tickets.length !== 1 ? 's' : ''})`;
+      archiveView.appendChild(hdr);
+
+      if (tickets.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'archive-empty';
+        empty.textContent = 'No archived tickets.';
+        archiveView.appendChild(empty);
+      } else {
+        tickets.forEach(ticket => archiveView.appendChild(archiveRowEl(ticket)));
+      }
+      meta.textContent = `${tickets.length} archived`;
+    } catch (err) {
+      archiveView.innerHTML = `<div class="board-error">Failed to load archive: ${err.message}</div>`;
+      meta.textContent = 'error';
+    }
+  }
+
+  function archiveRowEl(ticket) {
+    const row = document.createElement('div');
+    row.className = 'archive-row';
+    row.addEventListener('click', (e) => {
+      if (!e.target.closest('button')) openModal(ticket, 'archive', true);
+    });
+
+    const info = document.createElement('div');
+    info.className = 'archive-row-info';
+
+    const idEl = document.createElement('div');
+    idEl.className = 'archive-row-id';
+    idEl.textContent = ticket.id;
+    info.appendChild(idEl);
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'archive-row-title';
+    titleEl.textContent = ticket.title;
+    info.appendChild(titleEl);
+
+    row.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'archive-row-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'btn btn-restore';
+    restoreBtn.textContent = 'Restore';
+    restoreBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/unarchive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: ticket.id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('Restore failed:', err.error || res.status);
+          return;
+        }
+      } catch (err) {
+        console.error('Restore error:', err);
+        return;
+      }
+      loadArchive();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirm(`Delete ${ticket.id}? This cannot be undone.`)) return;
+      try {
+        const res = await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: ticket.id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('Delete failed:', err.error || res.status);
+          return;
+        }
+      } catch (err) {
+        console.error('Delete error:', err);
+        return;
+      }
+      loadArchive();
+    });
+
+    actions.appendChild(restoreBtn);
+    actions.appendChild(deleteBtn);
+    row.appendChild(actions);
+    return row;
   }
 
   async function load() {
@@ -1106,7 +1396,13 @@
   }
 
   loadAndFilter();
-  setInterval(loadAndFilter, 3000);
+  setInterval(() => {
+    if (currentView === 'board') {
+      loadAndFilter();
+    } else {
+      loadArchive();
+    }
+  }, 3000);
 </script>
 </body>
 </html>

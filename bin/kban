@@ -38,6 +38,7 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 readonly KBAN_VERSION="1.5.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
 readonly LANES=(backlog ready doing "done")
+readonly ARCHIVE_LANE="archive"
 readonly COL_WIDTH=22
 readonly TEMPLATES_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../templates"
 
@@ -66,10 +67,12 @@ Commands:
     move <id> <lane>            Move ticket to any lane
     block <id>                  Mark ticket as blocked
     unblock <id>                Clear blocked status from ticket
+    archive <id>                Move ticket to archive (hidden from board)
+    unarchive <id>              Restore ticket from archive to done
     tickets [lane]              Flat list of all tickets with lane/priority/deps
     serve                       Start the web UI (default: http://localhost:8080)
 
-Lanes: backlog, ready, doing, done
+Lanes: backlog, ready, doing, done, archive
 
 Environment variables for serve:
     KBAN_HOST           Host to bind (default: localhost)
@@ -125,7 +128,7 @@ get_deps() {
 find_ticket() {
     local id="${1}"
     local lane
-    for lane in "${LANES[@]}"; do
+    for lane in "${LANES[@]}" "${ARCHIVE_LANE}"; do
         local path="${KBAN_DIR}/${lane}/${id}.md"
         if [[ -f "${path}" ]]; then
             echo "${path}"
@@ -183,7 +186,7 @@ cmd_init() {
     fi
 
     local lane
-    for lane in "${LANES[@]}"; do
+    for lane in "${LANES[@]}" "${ARCHIVE_LANE}"; do
         mkdir -p "${KBAN_DIR}/${lane}"
         touch "${KBAN_DIR}/${lane}/.gitkeep"
     done
@@ -384,10 +387,10 @@ cmd_move() {
 
     local valid=false
     local lane
-    for lane in "${LANES[@]}"; do
+    for lane in "${LANES[@]}" "${ARCHIVE_LANE}"; do
         [[ "${lane}" == "${target}" ]] && valid=true
     done
-    [[ "${valid}" == "false" ]] && die "Invalid lane: ${target}. Valid: ${LANES[*]}"
+    [[ "${valid}" == "false" ]] && die "Invalid lane: ${target}. Valid: ${LANES[*]} ${ARCHIVE_LANE}"
 
     local path
     # shellcheck disable=SC2310
@@ -491,6 +494,41 @@ cmd_promote() {
     if [[ "${promoted}" -eq 0 ]]; then
         log_warn "No eligible tickets to promote"
     fi
+}
+
+# Move ticket to archive (hidden from board)
+# Arguments:
+#   $1 - ticket id
+cmd_archive() {
+    [[ $# -eq 0 ]] && die "Usage: kban archive <id>"
+    local id="${1}"
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    local current
+    current="$(basename "$(dirname "${path}")")"
+    if [[ "${current}" == "${ARCHIVE_LANE}" ]]; then
+        log_warn "${id} is already archived"
+        return 0
+    fi
+    mv "${path}" "${KBAN_DIR}/${ARCHIVE_LANE}/${id}.md"
+    log_success "${id}: ${current} → archive"
+}
+
+# Restore ticket from archive to done
+# Arguments:
+#   $1 - ticket id
+cmd_unarchive() {
+    [[ $# -eq 0 ]] && die "Usage: kban unarchive <id>"
+    local id="${1}"
+    local path="${KBAN_DIR}/${ARCHIVE_LANE}/${id}.md"
+    if [[ ! -f "${path}" ]]; then
+        die "Ticket not found in archive: ${id}"
+    fi
+    mv "${path}" "${KBAN_DIR}/done/${id}.md"
+    log_success "${id}: archive → done"
 }
 
 # Move ticket to doing
@@ -609,6 +647,8 @@ main() {
         promote)   cmd_promote ;;
         block)     cmd_block "$@" ;;
         unblock)   cmd_unblock "$@" ;;
+        archive)   cmd_archive "$@" ;;
+        unarchive) cmd_unarchive "$@" ;;
         tickets)   cmd_tickets "$@" ;;
         serve)     cmd_serve ;;
         -h|--help) usage ;;

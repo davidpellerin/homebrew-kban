@@ -17,6 +17,8 @@ HOST = os.environ.get("KBAN_HOST", "localhost")
 PORT = int(os.environ.get("KBAN_PORT", "8080"))
 
 LANES = ["backlog", "ready", "doing", "done"]
+ARCHIVE_LANE = "archive"
+ALL_LANES = LANES + [ARCHIVE_LANE]
 
 _template_path = os.path.join(os.path.dirname(__file__), "index.html")
 
@@ -55,6 +57,22 @@ def _parse_frontmatter(text):
     return fm, body
 
 
+def _ticket_from_path(path):
+    ticket_id = os.path.splitext(os.path.basename(path))[0]
+    with open(path) as f:
+        text = f.read()
+    fm, body = _parse_frontmatter(text)
+    blocked_val = fm.get("blocked", "")
+    return {
+        "id": ticket_id,
+        "title": fm.get("title", ticket_id),
+        "priority": fm.get("priority", "normal"),
+        "depends_on": fm.get("depends_on", []),
+        "blocked": blocked_val is True or str(blocked_val).lower() == "true",
+        "body": body,
+    }
+
+
 def board_json():
     kban_dir = _kban_dir()
     result = {lane: [] for lane in LANES}
@@ -66,19 +84,20 @@ def board_json():
         if not os.path.isdir(lane_dir):
             continue
         for path in sorted(glob.glob(os.path.join(lane_dir, "*.md"))):
-            ticket_id = os.path.splitext(os.path.basename(path))[0]
-            with open(path) as f:
-                text = f.read()
-            fm, body = _parse_frontmatter(text)
-            blocked_val = fm.get("blocked", "")
-            result[lane].append({
-                "id": ticket_id,
-                "title": fm.get("title", ticket_id),
-                "priority": fm.get("priority", "normal"),
-                "depends_on": fm.get("depends_on", []),
-                "blocked": blocked_val is True or str(blocked_val).lower() == "true",
-                "body": body,
-            })
+            result[lane].append(_ticket_from_path(path))
+    return result
+
+
+def archive_json():
+    kban_dir = _kban_dir()
+    result = []
+    if not kban_dir:
+        return result
+    archive_dir = os.path.join(kban_dir, ARCHIVE_LANE)
+    if not os.path.isdir(archive_dir):
+        return result
+    for path in sorted(glob.glob(os.path.join(archive_dir, "*.md"))):
+        result.append(_ticket_from_path(path))
     return result
 
 
@@ -112,6 +131,9 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/board":
             self.send_json(board_json())
+
+        elif path == "/api/archive":
+            self.send_json(archive_json())
 
         elif path == "/health":
             body = b"ok"
@@ -193,7 +215,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             src = None
-            for lane in LANES:
+            for lane in ALL_LANES:
                 candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
                 if os.path.isfile(candidate):
                     src = candidate
@@ -223,7 +245,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
             if not ticket_id or not title:
                 self.send_json({"error": "id and title are required"}, HTTPStatus.BAD_REQUEST)
                 return
-            if new_lane and new_lane not in LANES:
+            if new_lane and new_lane not in ALL_LANES:
                 self.send_json({"error": f"invalid lane: {new_lane}"}, HTTPStatus.BAD_REQUEST)
                 return
 
@@ -234,7 +256,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
 
             src = None
             current_lane = None
-            for lane in LANES:
+            for lane in ALL_LANES:
                 candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
                 if os.path.isfile(candidate):
                     src = candidate
@@ -289,7 +311,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "id and lane are required"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if target_lane not in LANES:
+            if target_lane not in ALL_LANES:
                 self.send_json({"error": f"invalid lane: {target_lane}"}, HTTPStatus.BAD_REQUEST)
                 return
 
@@ -300,7 +322,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
 
             # Find the ticket in any lane
             src = None
-            for lane in LANES:
+            for lane in ALL_LANES:
                 candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
                 if os.path.isfile(candidate):
                     src = candidate
@@ -315,6 +337,69 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 shutil.move(src, dest)
 
             self.send_json({"ok": True, "id": ticket_id, "lane": target_lane})
+
+        elif path == "/api/archive":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                payload = json.loads(self.rfile.read(length))
+                ticket_id = payload.get("id", "").strip()
+            except (json.JSONDecodeError, ValueError):
+                self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            if not ticket_id:
+                self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            kban_dir = _kban_dir()
+            if not kban_dir:
+                self.send_json({"error": "board not found"}, HTTPStatus.NOT_FOUND)
+                return
+
+            src = None
+            for lane in LANES:
+                candidate = os.path.join(kban_dir, lane, f"{ticket_id}.md")
+                if os.path.isfile(candidate):
+                    src = candidate
+                    break
+
+            if src is None:
+                self.send_json({"error": f"ticket not found: {ticket_id}"}, HTTPStatus.NOT_FOUND)
+                return
+
+            archive_dir = os.path.join(kban_dir, ARCHIVE_LANE)
+            os.makedirs(archive_dir, exist_ok=True)
+            shutil.move(src, os.path.join(archive_dir, f"{ticket_id}.md"))
+            self.send_json({"ok": True, "id": ticket_id, "lane": ARCHIVE_LANE})
+
+        elif path == "/api/unarchive":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                payload = json.loads(self.rfile.read(length))
+                ticket_id = payload.get("id", "").strip()
+            except (json.JSONDecodeError, ValueError):
+                self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            if not ticket_id:
+                self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            kban_dir = _kban_dir()
+            if not kban_dir:
+                self.send_json({"error": "board not found"}, HTTPStatus.NOT_FOUND)
+                return
+
+            src = os.path.join(kban_dir, ARCHIVE_LANE, f"{ticket_id}.md")
+            if not os.path.isfile(src):
+                self.send_json({"error": f"ticket not found in archive: {ticket_id}"}, HTTPStatus.NOT_FOUND)
+                return
+
+            dest_dir = os.path.join(kban_dir, "done")
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.move(src, os.path.join(dest_dir, f"{ticket_id}.md"))
+            self.send_json({"ok": True, "id": ticket_id, "lane": "done"})
+
         else:
             body = b"Not found"
             self.send_response(HTTPStatus.NOT_FOUND)
