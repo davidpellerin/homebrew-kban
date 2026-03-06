@@ -98,17 +98,18 @@ kban serve               # Start the web UI at http://localhost:8080
 
 Lanes: `backlog`, `ready`, `doing`, `done`
 
-### Web UI
+### Screenshots
 
-```bash
-kban serve
-# or with custom host/port:
-KBAN_HOST=0.0.0.0 KBAN_PORT=9000 kban serve
-```
+#### Web UI
+![kban serve web UI](images/kban-board.png)
 
-Opens a minimal browser interface at `http://localhost:8080` showing the board. Requires Python 3 (no extra packages needed).
+#### Editing a Ticket
+![kban edit ticket](images/kban-edit-ticket.png)
 
-![kban serve web UI](images/serve.png)
+#### Archive View
+![kban archive](images/kban-archive.png)
+
+
 
 ## Sample Prompts (Claude Code)
 
