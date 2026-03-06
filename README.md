@@ -17,7 +17,7 @@ Navigate to your project directory and run:
 ```bash
 $ cd myproject
 
-$ kban init                       # Scaffold the kanban board (.kban/work/ structure)
+$ kban init                       # Scaffold the kanban board structure
 
 $ kban install skill project      # Install the kban skill for this project
 ```
