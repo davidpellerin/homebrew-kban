@@ -150,6 +150,34 @@ what's blocked and why?
 use the kban skill to work on all tasks that are Ready and use the most appropriate agents & subagents
 ```
 
+## Autonomous Project Delivery with Ralph Wiggum Loop
+
+Use the following techinque to let your project cook for hours with no human intervention:
+
+```
+Ensure you have the official Claude Plugins marketplace installed:
+
+  $ claude plugin marketplace add anthropics/claude-plugins-official
+
+Install the Ralph Loop plugin:
+
+  $ claude plugin install ralph-loop@claude-plugins-official
+
+Start Claude Code in yolo mode:
+
+  claude --dangerously-skip-permissions
+
+Ensure you have some tickets that are in a Ready state:
+
+  Using the kban skill list all 'ready' tickets.
+
+Write a prompt designed for autonomy:
+
+  /ralph-loop:ralph-loop "using the kban skill work through items that are marked as 'Ready' and work
+  on them until they are all complete. When all items are done respond with <promise>COMPLETE</promise>" --max-iterations 5
+  --completion-promise "COMPLETE"
+```
+
 ## License
 
 MIT © [David Pellerin](https://github.com/davidpellerin)
