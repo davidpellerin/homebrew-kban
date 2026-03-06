@@ -100,6 +100,9 @@ Lanes: `backlog`, `ready`, `doing`, `done`
 
 ### Screenshots
 
+#### CLI Ticket List
+![kban cli tickets](images/kban-cli-tickets.png)
+
 #### Web UI
 ![kban serve web UI](images/kban-board.png)
 
