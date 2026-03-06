@@ -19,8 +19,20 @@ PORT = int(os.environ.get("KBAN_PORT", "8080"))
 LANES = ["backlog", "ready", "doing", "done"]
 ARCHIVE_LANE = "archive"
 ALL_LANES = LANES + [ARCHIVE_LANE]
+VALID_PRIORITIES = {"urgent", "high", "normal", "low"}
+
+
+def _sanitize_line(value):
+    """Strip newlines to prevent frontmatter injection."""
+    return value.replace("\r", "").replace("\n", " ")
 
 _template_path = os.path.join(os.path.dirname(__file__), "index.html")
+
+_TICKET_ID_RE = re.compile(r"^TASK-\d+$")
+
+
+def _valid_ticket_id(ticket_id):
+    return bool(_TICKET_ID_RE.match(ticket_id))
 
 
 def _kban_dir():
@@ -159,9 +171,9 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             try:
                 payload = json.loads(self.rfile.read(length))
-                title    = payload.get("title", "").strip()
+                title    = _sanitize_line(payload.get("title", "").strip())
                 lane     = payload.get("lane", "backlog").strip()
-                priority = payload.get("priority", "normal").strip()
+                priority = _sanitize_line(payload.get("priority", "normal").strip())
                 body     = payload.get("body", "").strip()
             except (json.JSONDecodeError, ValueError):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
@@ -169,6 +181,9 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
 
             if not title:
                 self.send_json({"error": "title is required"}, HTTPStatus.BAD_REQUEST)
+                return
+            if priority not in VALID_PRIORITIES:
+                self.send_json({"error": f"invalid priority: {priority}"}, HTTPStatus.BAD_REQUEST)
                 return
             if lane not in LANES:
                 self.send_json({"error": f"invalid lane: {lane}"}, HTTPStatus.BAD_REQUEST)
@@ -205,7 +220,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if not ticket_id:
+            if not ticket_id or not _valid_ticket_id(ticket_id):
                 self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
                 return
 
@@ -233,8 +248,8 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = json.loads(self.rfile.read(length))
                 ticket_id = payload.get("id", "").strip()
-                title     = payload.get("title", "").strip()
-                priority  = payload.get("priority", "normal").strip()
+                title     = _sanitize_line(payload.get("title", "").strip())
+                priority  = _sanitize_line(payload.get("priority", "normal").strip())
                 body      = payload.get("body", "").strip()
                 new_lane  = payload.get("lane", "").strip()
                 blocked   = payload.get("blocked", False)
@@ -242,8 +257,11 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if not ticket_id or not title:
+            if not ticket_id or not _valid_ticket_id(ticket_id) or not title:
                 self.send_json({"error": "id and title are required"}, HTTPStatus.BAD_REQUEST)
+                return
+            if priority not in VALID_PRIORITIES:
+                self.send_json({"error": f"invalid priority: {priority}"}, HTTPStatus.BAD_REQUEST)
                 return
             if new_lane and new_lane not in ALL_LANES:
                 self.send_json({"error": f"invalid lane: {new_lane}"}, HTTPStatus.BAD_REQUEST)
@@ -307,7 +325,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if not ticket_id or not target_lane:
+            if not ticket_id or not _valid_ticket_id(ticket_id) or not target_lane:
                 self.send_json({"error": "id and lane are required"}, HTTPStatus.BAD_REQUEST)
                 return
 
@@ -347,7 +365,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if not ticket_id:
+            if not ticket_id or not _valid_ticket_id(ticket_id):
                 self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
                 return
 
@@ -381,7 +399,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
 
-            if not ticket_id:
+            if not ticket_id or not _valid_ticket_id(ticket_id):
                 self.send_json({"error": "id is required"}, HTTPStatus.BAD_REQUEST)
                 return
 

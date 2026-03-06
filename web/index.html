@@ -1169,7 +1169,10 @@
       }
       meta.textContent = `${tickets.length} archived`;
     } catch (err) {
-      archiveView.innerHTML = `<div class="board-error">Failed to load archive: ${err.message}</div>`;
+      const errDiv = document.createElement('div');
+      errDiv.className = 'board-error';
+      errDiv.textContent = `Failed to load archive: ${err.message}`;
+      archiveView.appendChild(errDiv);
       meta.textContent = 'error';
     }
   }
@@ -1336,12 +1339,16 @@
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function highlightText(el, query) {
     const text = el.dataset.rawText || el.textContent;
     el.dataset.rawText = text;
     if (!query) { el.textContent = text; return; }
     const re = new RegExp(`(${escapeRe(query)})`, 'gi');
-    el.innerHTML = text.replace(re, '<mark>$1</mark>');
+    el.innerHTML = escapeHtml(text).replace(re, '<mark>$1</mark>');
   }
 
   function applyFilter() {
