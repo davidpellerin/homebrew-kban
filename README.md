@@ -1,5 +1,7 @@
 # homebrew-kban
 
+[![codecov](https://codecov.io/gh/davidpellerin/homebrew-kban/branch/main/graph/badge.svg)](https://codecov.io/gh/davidpellerin/homebrew-kban)
+
 Homebrew tap for [kban](https://github.com/davidpellerin/homebrew-kban) — a simple filesystem-based kanban board for AI tooling such as Claude Code.
 
 ## Install
