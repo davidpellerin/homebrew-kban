@@ -35,7 +35,7 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 # =============================================================================
 
 # shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
-readonly KBAN_VERSION="1.5.0"
+readonly KBAN_VERSION="1.8.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
 readonly LANES=(backlog ready doing "done")
 readonly ARCHIVE_LANE="archive"

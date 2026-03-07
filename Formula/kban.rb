@@ -5,6 +5,8 @@ class Kban < Formula
   sha256 "9138d916948d1d217565152c212478fe97ca8ba2cd2dd17592181c581fcf99a6"
   license "MIT"
 
+  depends_on "python@3"
+
   def install
     bin.install "bin/kban"
     (prefix/"web").install "web/serve.py", "web/index.html"
