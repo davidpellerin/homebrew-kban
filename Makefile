@@ -9,4 +9,4 @@ test-bash:
 	bats tests/kban.bats
 
 test-python:
-	pytest tests/test_serve.py -v -p no:langsmith
+	pytest tests/test_serve.py -v -p no:langsmith --cov=web --cov-report=term-missing

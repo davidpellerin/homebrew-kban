@@ -192,12 +192,10 @@
 
     .priority[data-p="low"]    { color: var(--text-muted); }
     .priority[data-p="low"]    .priority-dot { background: color-mix(in srgb, var(--text-muted) 40%, transparent); }
-    .priority[data-p="normal"] { color: var(--blue); }
-    .priority[data-p="normal"] .priority-dot { background: var(--blue); }
+    .priority[data-p="medium"] { color: var(--blue); }
+    .priority[data-p="medium"] .priority-dot { background: var(--blue); }
     .priority[data-p="high"]   { color: var(--yellow); }
     .priority[data-p="high"]   .priority-dot { background: var(--yellow); }
-    .priority[data-p="urgent"] { color: var(--red); }
-    .priority[data-p="urgent"] .priority-dot { background: var(--red); }
 
     /* ── Blocked badge ──────────────────────────────────────────────────── */
     .blocked-badge {
@@ -688,9 +686,8 @@
     <input class="search-input" id="search-input" type="search" placeholder="Search tickets…" autocomplete="off" aria-label="Search tickets">
     <select class="priority-filter" id="priority-filter" aria-label="Filter by priority">
       <option value="">All priorities</option>
-      <option value="urgent">Urgent</option>
       <option value="high">High</option>
-      <option value="normal">Normal</option>
+      <option value="medium">Medium</option>
       <option value="low">Low</option>
     </select>
   </div>
@@ -735,9 +732,8 @@
         <label class="form-label" for="nt-priority">Priority</label>
         <select class="form-select" id="nt-priority">
           <option value="low">Low</option>
-          <option value="normal" selected>Normal</option>
+          <option value="medium" selected>Medium</option>
           <option value="high">High</option>
-          <option value="urgent">Urgent</option>
         </select>
       </div>
       <div class="form-group">
@@ -791,9 +787,8 @@
         <label class="form-label" for="et-priority">Priority</label>
         <select class="form-select" id="et-priority">
           <option value="low">Low</option>
-          <option value="normal">Normal</option>
+          <option value="medium">Medium</option>
           <option value="high">High</option>
-          <option value="urgent">Urgent</option>
         </select>
       </div>
       <div class="form-group form-check">
@@ -915,7 +910,7 @@
   function openEditMode() {
     const t = currentTicketObj;
     document.getElementById('et-title').value      = t.title;
-    document.getElementById('et-priority').value   = t.priority || 'normal';
+    document.getElementById('et-priority').value   = t.priority || 'medium';
     document.getElementById('et-lane').value       = currentLaneId;
     document.getElementById('et-blocked').checked  = t.blocked || false;
     const etBody = document.getElementById('et-body');
@@ -1014,11 +1009,11 @@
   function priorityEl(p) {
     const wrap = document.createElement('div');
     wrap.className = 'priority';
-    wrap.dataset.p = p || 'normal';
+    wrap.dataset.p = p || 'medium';
     const dot = document.createElement('span');
     dot.className = 'priority-dot';
     wrap.appendChild(dot);
-    wrap.appendChild(document.createTextNode(p || 'normal'));
+    wrap.appendChild(document.createTextNode(p || 'medium'));
     return wrap;
   }
 
@@ -1291,7 +1286,7 @@
   function openNewTask() {
     ntTitle.value    = '';
     ntLane.value     = 'backlog';
-    ntPriority.value = 'normal';
+    ntPriority.value = 'medium';
     ntBody.value     = '';
     ntBackdrop.classList.remove('hidden');
     ntTitle.focus();

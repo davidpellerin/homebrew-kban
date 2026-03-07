@@ -19,7 +19,7 @@ PORT = int(os.environ.get("KBAN_PORT", "8080"))
 LANES = ["backlog", "ready", "doing", "done"]
 ARCHIVE_LANE = "archive"
 ALL_LANES = LANES + [ARCHIVE_LANE]
-VALID_PRIORITIES = {"urgent", "high", "normal", "low"}
+VALID_PRIORITIES = {"high", "medium", "low", "normal"}
 
 
 def _sanitize_line(value):

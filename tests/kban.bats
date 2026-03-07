@@ -562,6 +562,35 @@ EOF
     grep -q "priority: medium" .kban/work/backlog/FEAT-001.md
 }
 
+# ─── delete ──────────────────────────────────────────────────────────────────
+
+@test "delete removes ticket file" {
+    "$KBAN" init
+    run "$KBAN" delete SETUP-001
+    [ "$status" -eq 0 ]
+    [ ! -f ".kban/work/backlog/SETUP-001.md" ]
+}
+
+@test "delete works from any lane" {
+    "$KBAN" init
+    "$KBAN" move SETUP-001 doing
+    run "$KBAN" delete SETUP-001
+    [ "$status" -eq 0 ]
+    [ ! -f ".kban/work/doing/SETUP-001.md" ]
+}
+
+@test "delete fails for nonexistent ticket" {
+    "$KBAN" init
+    run "$KBAN" delete NONEXISTENT-999
+    [ "$status" -ne 0 ]
+}
+
+@test "delete fails with no arguments" {
+    "$KBAN" init
+    run "$KBAN" delete
+    [ "$status" -ne 0 ]
+}
+
 # ─── error handling ───────────────────────────────────────────────────────────
 
 @test "unknown command exits with error" {

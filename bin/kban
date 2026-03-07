@@ -72,6 +72,7 @@ Commands:
     archive <id>                Move ticket to archive (hidden from board)
     unarchive <id>              Restore ticket from archive to done
     tickets [lane]              Flat list of all tickets with lane/priority/deps
+    delete <id>                 Delete a ticket permanently
     serve                       Start the web UI (default: http://localhost:8080)
 
 Options for create:
@@ -338,7 +339,7 @@ cmd_tickets() {
             [[ "$(echo "${blocked_val}" | tr '[:upper:]' '[:lower:]')" == "true" ]] && row_suffix=" ${RED}[BLOCKED]${NC}"
 
             printf "%-${id_w}s  %-${lane_w}s  %-${prio_w}s  %s" \
-                "${tid}" "${lane}" "${priority:-normal}" "${title:-${tid}}"
+                "${tid}" "${lane}" "${priority:-medium}" "${title:-${tid}}"
             echo -e "${row_suffix}"
         done < <(find "${KBAN_DIR}/${lane}" -name "*.md" 2>/dev/null | sort)
     done
@@ -705,6 +706,23 @@ cmd_install_skill_claude() {
     log_info "Run 'kban init' first if you haven't set up the board yet"
 }
 
+# Delete a ticket permanently
+# Arguments:
+#   $1 - ticket id
+cmd_delete() {
+    [[ $# -eq 0 ]] && die "Usage: kban delete <id>"
+    local id="${1}"
+    local path
+    # shellcheck disable=SC2310
+    if ! path="$(find_ticket "${id}")"; then
+        die "Ticket not found: ${id}"
+    fi
+    local lane
+    lane="$(basename "$(dirname "${path}")")"
+    rm "${path}"
+    log_success "Deleted ${id} (was in ${lane})"
+}
+
 # Start the web UI
 cmd_serve() {
     local script
@@ -743,6 +761,7 @@ main() {
         archive)   cmd_archive "$@" ;;
         unarchive) cmd_unarchive "$@" ;;
         tickets)   cmd_tickets "$@" ;;
+        delete)    cmd_delete "$@" ;;
         serve)     cmd_serve ;;
         -h|--help) usage ;;
         *) die "Unknown command: ${cmd}. Use 'kban --help' for usage." ;;
