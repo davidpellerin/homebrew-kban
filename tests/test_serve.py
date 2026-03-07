@@ -66,6 +66,115 @@ class TestValidTicketId:
         assert not serve._valid_ticket_id("TASK- 001")
 
 
+class TestBoardJson:
+    def test_returns_empty_lanes_when_no_kban_dir(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # no .kban/work here
+        result = serve.board_json()
+        assert result == {"backlog": [], "ready": [], "doing": [], "done": []}
+
+    def test_skips_missing_lane_directory(self, tmp_path, monkeypatch):
+        # Create .kban/work but omit the "ready" lane directory
+        work = tmp_path / ".kban" / "work"
+        for lane in ["backlog", "doing", "done"]:
+            (work / lane).mkdir(parents=True)
+        monkeypatch.chdir(tmp_path)
+        result = serve.board_json()
+        assert result["ready"] == []
+        assert result["backlog"] == []
+
+
+class TestArchiveJson:
+    def test_returns_empty_when_no_kban_dir(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # no .kban/work here
+        assert serve.archive_json() == []
+
+    def test_returns_empty_when_no_archive_dir(self, tmp_path, monkeypatch):
+        work = tmp_path / ".kban" / "work"
+        for lane in ["backlog", "ready", "doing", "done"]:
+            (work / lane).mkdir(parents=True)
+        # archive dir intentionally omitted
+        monkeypatch.chdir(tmp_path)
+        assert serve.archive_json() == []
+
+
+class TestKbanDir:
+    def test_returns_path_when_kban_work_in_cwd(self, tmp_path):
+        work = tmp_path / ".kban" / "work"
+        work.mkdir(parents=True)
+        original = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = serve._kban_dir()
+            assert result == str(work)
+        finally:
+            os.chdir(original)
+
+    def test_finds_kban_work_in_parent(self, tmp_path):
+        work = tmp_path / ".kban" / "work"
+        work.mkdir(parents=True)
+        child = tmp_path / "subdir" / "nested"
+        child.mkdir(parents=True)
+        original = os.getcwd()
+        try:
+            os.chdir(child)
+            result = serve._kban_dir()
+            assert result == str(work)
+        finally:
+            os.chdir(original)
+
+    def test_returns_none_when_no_kban_work(self, tmp_path):
+        original = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = serve._kban_dir()
+            assert result is None
+        finally:
+            os.chdir(original)
+
+
+class TestTicketFromPath:
+    def _write(self, tmp_path, filename, content):
+        p = tmp_path / filename
+        p.write_text(content)
+        return str(p)
+
+    def test_title_falls_back_to_ticket_id(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\npriority: high\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["title"] == "TASK-001"
+
+    def test_priority_defaults_to_normal(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: No priority\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["priority"] == "normal"
+
+    def test_depends_on_defaults_to_empty_list(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: No deps\npriority: low\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["depends_on"] == []
+
+    def test_blocked_string_true_parses_to_bool(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: Blocked\nblocked: true\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["blocked"] is True
+
+    def test_blocked_string_false_parses_to_bool(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: Not blocked\nblocked: false\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["blocked"] is False
+
+    def test_blocked_missing_is_false(self, tmp_path):
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: No blocked field\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["blocked"] is False
+
+    def test_blocked_bool_true_parses_correctly(self, tmp_path):
+        # YAML parsed as native bool True would come through as the string "True" via our parser
+        path = self._write(tmp_path, "TASK-001.md", "---\ntitle: Blocked bool\nblocked: True\ndepends_on: []\n---\n")
+        t = serve._ticket_from_path(path)
+        assert t["blocked"] is True
+
+
 class TestParseFrontmatter:
     def test_basic_frontmatter(self):
         text = "---\ntitle: My Ticket\npriority: high\ndepends_on: []\n---\nBody text."
@@ -406,6 +515,17 @@ class TestMove:
         status, data = _post(f"{server}/api/move", {"lane": "ready"})
         assert status == 400
 
+    def test_move_invalid_json(self, server):
+        req = urllib.request.Request(
+            f"{server}/api/move", data=b"not json", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
     def test_move_to_archive(self, server, board_dir):
         _write_ticket(board_dir, "done", "TASK-001")
         status, data = _post(f"{server}/api/move", {"id": "TASK-001", "lane": "archive"})
@@ -422,6 +542,17 @@ class TestDelete:
         assert status == 200
         assert data["ok"] is True
         assert not (board_dir / ".kban" / "work" / "backlog" / "TASK-001.md").exists()
+
+    def test_delete_invalid_json(self, server):
+        req = urllib.request.Request(
+            f"{server}/api/delete", data=b"not json", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
 
     def test_delete_ticket_from_any_lane(self, server, board_dir):
         _write_ticket(board_dir, "doing", "TASK-001")
@@ -445,6 +576,17 @@ class TestDelete:
 # POST /api/update
 
 class TestUpdate:
+    def test_update_invalid_json(self, server):
+        req = urllib.request.Request(
+            f"{server}/api/update", data=b"not json", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
     def test_update_title_and_priority(self, server, board_dir):
         _write_ticket(board_dir, "backlog", "TASK-001", title="Old Title")
         status, data = _post(f"{server}/api/update", {
@@ -528,6 +670,17 @@ class TestUpdate:
 # POST /api/archive
 
 class TestArchiveEndpoint:
+    def test_archive_invalid_json(self, server):
+        req = urllib.request.Request(
+            f"{server}/api/archive", data=b"not json", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
     def test_archive_ticket(self, server, board_dir):
         _write_ticket(board_dir, "backlog", "TASK-001")
         status, data = _post(f"{server}/api/archive", {"id": "TASK-001"})
@@ -557,6 +710,17 @@ class TestArchiveEndpoint:
 # POST /api/unarchive
 
 class TestUnarchiveEndpoint:
+    def test_unarchive_invalid_json(self, server):
+        req = urllib.request.Request(
+            f"{server}/api/unarchive", data=b"not json", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
     def test_unarchive_ticket_to_done(self, server, board_dir):
         _write_ticket(board_dir, "archive", "TASK-001")
         status, data = _post(f"{server}/api/unarchive", {"id": "TASK-001"})
@@ -579,6 +743,114 @@ class TestUnarchiveEndpoint:
 
 
 # ─── End-to-end ticket lifecycle ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def board_dir_no_archive(tmp_path):
+    work = tmp_path / ".kban" / "work"
+    for lane in ["backlog", "ready", "doing", "done"]:
+        (work / lane).mkdir(parents=True)
+    # archive dir intentionally omitted
+    return tmp_path
+
+
+@pytest.fixture
+def server_no_archive(board_dir_no_archive):
+    original_cwd = os.getcwd()
+    os.chdir(board_dir_no_archive)
+
+    httpd = http.server.HTTPServer(("127.0.0.1", 0), serve.KbanHandler)
+    port = httpd.server_address[1]
+
+    thread = threading.Thread(target=httpd.serve_forever)
+    thread.daemon = True
+    thread.start()
+
+    yield f"http://127.0.0.1:{port}", board_dir_no_archive
+
+    httpd.shutdown()
+    os.chdir(original_cwd)
+
+
+# GET /
+
+class TestGetRoot:
+    def test_serves_index_html(self, server):
+        req = urllib.request.Request(f"{server}/")
+        with urllib.request.urlopen(req) as resp:
+            assert resp.status == 200
+            assert "text/html" in resp.headers.get("Content-Type", "")
+            assert len(resp.read()) > 0
+
+
+# POST /api/move (additional branch coverage)
+
+class TestMoveAdditional:
+    def test_move_to_same_lane_is_noop(self, server, board_dir):
+        _write_ticket(board_dir, "backlog", "TASK-001")
+        status, data = _post(f"{server}/api/move", {"id": "TASK-001", "lane": "backlog"})
+        assert status == 200
+        assert data["ok"] is True
+        assert data["lane"] == "backlog"
+        assert (board_dir / ".kban" / "work" / "backlog" / "TASK-001.md").exists()
+
+
+# POST /api/update (additional branch coverage)
+
+class TestUpdateAdditional:
+    def test_update_without_lane_stays_in_current_lane(self, server, board_dir):
+        _write_ticket(board_dir, "ready", "TASK-001", title="Original")
+        status, data = _post(f"{server}/api/update", {
+            "id": "TASK-001", "title": "Updated", "priority": "normal",
+        })
+        assert status == 200
+        assert data["lane"] == "ready"
+        assert (board_dir / ".kban" / "work" / "ready" / "TASK-001.md").exists()
+
+    def test_update_to_archive_lane(self, server, board_dir):
+        _write_ticket(board_dir, "done", "TASK-001", title="Moving to archive")
+        status, data = _post(f"{server}/api/update", {
+            "id": "TASK-001", "title": "Archived via update",
+            "priority": "normal", "lane": "archive",
+        })
+        assert status == 200
+        assert data["lane"] == "archive"
+        assert (board_dir / ".kban" / "work" / "archive" / "TASK-001.md").exists()
+
+    def test_update_with_body(self, server, board_dir):
+        _write_ticket(board_dir, "backlog", "TASK-001")
+        status, data = _post(f"{server}/api/update", {
+            "id": "TASK-001", "title": "With body", "priority": "normal",
+            "lane": "backlog", "body": "## Goal\n\nUpdated goal.",
+        })
+        assert status == 200
+        content = (board_dir / ".kban" / "work" / "backlog" / "TASK-001.md").read_text()
+        assert "## Goal" in content
+
+
+# POST /api/archive when archive dir doesn't exist
+
+class TestArchiveCreatesDir:
+    def test_archive_creates_archive_dir_if_missing(self, server_no_archive):
+        server_url, board_dir = server_no_archive
+        _write_ticket(board_dir, "done", "TASK-001")
+        status, data = _post(f"{server_url}/api/archive", {"id": "TASK-001"})
+        assert status == 200
+        assert data["lane"] == "archive"
+        assert (board_dir / ".kban" / "work" / "archive" / "TASK-001.md").exists()
+
+
+# POST /api/create sequential ID assignment
+
+class TestCreateSequentialIds:
+    def test_sequential_ids_across_lanes(self, server, board_dir):
+        # Pre-populate TASK tickets across multiple lanes
+        _write_ticket(board_dir, "backlog", "TASK-001")
+        _write_ticket(board_dir, "doing", "TASK-002")
+        _write_ticket(board_dir, "done", "TASK-003")
+        status, data = _post(f"{server}/api/create", {"title": "New ticket", "priority": "normal"})
+        assert status == 200
+        assert data["id"] == "TASK-004"
 
 
 class TestTicketLifecycle:
