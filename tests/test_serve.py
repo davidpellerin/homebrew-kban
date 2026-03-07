@@ -67,6 +67,14 @@ class TestValidTicketId:
 
 
 class TestBoardJson:
+    def _setup_work(self, tmp_path, lanes=None):
+        if lanes is None:
+            lanes = ["backlog", "ready", "doing", "done"]
+        work = tmp_path / ".kban" / "work"
+        for lane in lanes:
+            (work / lane).mkdir(parents=True)
+        return work
+
     def test_returns_empty_lanes_when_no_kban_dir(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)  # no .kban/work here
         result = serve.board_json()
@@ -82,8 +90,46 @@ class TestBoardJson:
         assert result["ready"] == []
         assert result["backlog"] == []
 
+    def test_returns_ticket_from_each_lane(self, tmp_path, monkeypatch):
+        work = self._setup_work(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        for lane in ["backlog", "ready", "doing", "done"]:
+            (work / lane / f"TASK-001.md").write_text(
+                f"---\ntitle: {lane} ticket\npriority: normal\ndepends_on: []\n---\n"
+            )
+        result = serve.board_json()
+        for lane in ["backlog", "ready", "doing", "done"]:
+            assert len(result[lane]) == 1
+            assert result[lane][0]["title"] == f"{lane} ticket"
+
+    def test_multiple_tickets_are_sorted(self, tmp_path, monkeypatch):
+        work = self._setup_work(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        (work / "backlog" / "TASK-002.md").write_text(
+            "---\ntitle: Second\npriority: normal\ndepends_on: []\n---\n"
+        )
+        (work / "backlog" / "TASK-001.md").write_text(
+            "---\ntitle: First\npriority: normal\ndepends_on: []\n---\n"
+        )
+        result = serve.board_json()
+        ids = [t["id"] for t in result["backlog"]]
+        assert ids == sorted(ids)
+
+    def test_lane_with_no_md_files_returns_empty(self, tmp_path, monkeypatch):
+        self._setup_work(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = serve.board_json()
+        for lane in ["backlog", "ready", "doing", "done"]:
+            assert result[lane] == []
+
 
 class TestArchiveJson:
+    def _setup_work(self, tmp_path):
+        work = tmp_path / ".kban" / "work"
+        for lane in ["backlog", "ready", "doing", "done", "archive"]:
+            (work / lane).mkdir(parents=True)
+        return work
+
     def test_returns_empty_when_no_kban_dir(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)  # no .kban/work here
         assert serve.archive_json() == []
@@ -95,6 +141,28 @@ class TestArchiveJson:
         # archive dir intentionally omitted
         monkeypatch.chdir(tmp_path)
         assert serve.archive_json() == []
+
+    def test_returns_archived_tickets(self, tmp_path, monkeypatch):
+        work = self._setup_work(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        (work / "archive" / "TASK-001.md").write_text(
+            "---\ntitle: Archived ticket\npriority: normal\ndepends_on: []\n---\n"
+        )
+        result = serve.archive_json()
+        assert len(result) == 1
+        assert result[0]["id"] == "TASK-001"
+        assert result[0]["title"] == "Archived ticket"
+
+    def test_multiple_archived_tickets_are_sorted(self, tmp_path, monkeypatch):
+        work = self._setup_work(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        for name in ["TASK-003", "TASK-001", "TASK-002"]:
+            (work / "archive" / f"{name}.md").write_text(
+                f"---\ntitle: {name}\npriority: normal\ndepends_on: []\n---\n"
+            )
+        result = serve.archive_json()
+        ids = [t["id"] for t in result]
+        assert ids == sorted(ids)
 
 
 class TestKbanDir:
@@ -666,6 +734,17 @@ class TestUpdate:
         content = (board_dir / ".kban" / "work" / "backlog" / "TASK-001.md").read_text()
         assert "blocked: true" not in content
 
+    def test_update_preserves_depends_on_as_bare_string(self, server, board_dir):
+        # Write a ticket whose depends_on is a bare string (no brackets) — hits the else branch
+        path = board_dir / ".kban" / "work" / "backlog" / "TASK-001.md"
+        path.write_text("---\ntitle: Bare dep\npriority: normal\ndepends_on: TASK-000\n---\n")
+        status, data = _post(f"{server}/api/update", {
+            "id": "TASK-001", "title": "Bare dep", "priority": "normal", "lane": "backlog",
+        })
+        assert status == 200
+        content = path.read_text()
+        assert "TASK-000" in content
+
 
 # POST /api/archive
 
@@ -899,3 +978,59 @@ class TestTicketLifecycle:
         # Verify gone from archive
         _, archive = _get(f"{server}/api/archive")
         assert not any(t["id"] == ticket_id for t in archive)
+
+
+# ─── "Board not found" branches ───────────────────────────────────────────────
+
+
+@pytest.fixture
+def server_no_board(tmp_path):
+    """Server started in a directory with no .kban/work/ — _kban_dir() returns None."""
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+
+    httpd = http.server.HTTPServer(("127.0.0.1", 0), serve.KbanHandler)
+    port = httpd.server_address[1]
+
+    thread = threading.Thread(target=httpd.serve_forever)
+    thread.daemon = True
+    thread.start()
+
+    yield f"http://127.0.0.1:{port}"
+
+    httpd.shutdown()
+    os.chdir(original_cwd)
+
+
+class TestBoardNotFound:
+    def test_create_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/create", {"title": "Test", "priority": "normal"})
+        assert status == 404
+        assert data["error"] == "board not found"
+
+    def test_delete_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/delete", {"id": "TASK-001"})
+        assert status == 404
+        assert data["error"] == "board not found"
+
+    def test_update_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/update", {
+            "id": "TASK-001", "title": "Test", "priority": "normal",
+        })
+        assert status == 404
+        assert data["error"] == "board not found"
+
+    def test_move_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/move", {"id": "TASK-001", "lane": "ready"})
+        assert status == 404
+        assert data["error"] == "board not found"
+
+    def test_archive_post_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/archive", {"id": "TASK-001"})
+        assert status == 404
+        assert data["error"] == "board not found"
+
+    def test_unarchive_returns_404_when_no_board(self, server_no_board):
+        status, data = _post(f"{server_no_board}/api/unarchive", {"id": "TASK-001"})
+        assert status == 404
+        assert data["error"] == "board not found"
