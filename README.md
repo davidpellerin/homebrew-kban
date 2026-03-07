@@ -37,6 +37,7 @@ Commands:
     install skill user          Install Claude Code skill for your user account (all projects)
     install skill project       Install Claude Code skill for this project only
     board                       Show the board overview
+    create <id>                 Create a new ticket (default lane: backlog)
     list [lane]                 List tickets in a lane (or all lanes)
     show <id>                   Show ticket details
     next                        Show the next actionable ticket (ready + deps met)
@@ -61,8 +62,8 @@ $ kban board
 
 BACKLOG (1)             READY (2)               DOING (1)               DONE (1)
 ──────────────────────  ──────────────────────  ──────────────────────  ──────────────────────
-003-Add-Pagination      001-Setup-API           002-Create-UI           000-Init-Project
-                        004-Write-Tests
+TASK-003                TASK-001                TASK-002                TASK-000
+                        TASK-004
 ```
 
 ## Tickets
@@ -70,7 +71,7 @@ BACKLOG (1)             READY (2)               DOING (1)               DONE (1)
 Tickets are plain markdown files with a small YAML frontmatter block. Drop them in the appropriate lane folder under `.kban/work/`.
 
 ```markdown
-# .kban/work/ready/001-Setup-API.md
+# .kban/work/ready/TASK-001.md
 ---
 title: Setup API
 priority: high
@@ -102,11 +103,11 @@ blocked: true
 Tickets can also declare dependencies on other tickets:
 
 ```markdown
-# .kban/work/backlog/002-Create-UI.md
+# .kban/work/backlog/TASK-002.md
 ---
 title: Create UI
 priority: high
-depends_on: [001-Setup-API]
+depends_on: [TASK-001]
 ---
 
 ## Goal

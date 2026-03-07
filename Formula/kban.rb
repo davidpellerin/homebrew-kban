@@ -15,5 +15,28 @@ class Kban < Formula
 
   test do
     system "#{bin}/kban", "--help"
+    assert_match "kban #{version}", shell_output("#{bin}/kban version")
+
+    # Init creates the expected lane directories
+    system "#{bin}/kban", "init"
+    assert_predicate testpath/".kban"/"work"/"backlog", :directory?
+    assert_predicate testpath/".kban"/"work"/"ready", :directory?
+    assert_predicate testpath/".kban"/"work"/"doing", :directory?
+    assert_predicate testpath/".kban"/"work"/"done", :directory?
+    assert_predicate testpath/".kban"/"work"/"archive", :directory?
+
+    # Board and list work after init
+    system "#{bin}/kban", "board"
+    assert_match "SETUP-001", shell_output("#{bin}/kban list backlog")
+
+    # Full ticket lifecycle: backlog → ready → doing → done
+    system "#{bin}/kban", "move", "SETUP-001", "ready"
+    assert_match "SETUP-001", shell_output("#{bin}/kban list ready")
+
+    system "#{bin}/kban", "start", "SETUP-001"
+    assert_match "SETUP-001", shell_output("#{bin}/kban list doing")
+
+    system "#{bin}/kban", "done", "SETUP-001"
+    assert_match "SETUP-001", shell_output("#{bin}/kban list done")
   end
 end

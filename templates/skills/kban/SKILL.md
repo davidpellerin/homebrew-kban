@@ -12,6 +12,7 @@ description: Manage a filesystem-based kanban board using the kban CLI. Use when
 ```bash
 kban init                  # Create .kban/ structure in current directory
 kban board                 # Show board overview (all lanes and ticket counts)
+kban create <id>           # Create a new ticket (default lane: backlog)
 kban list [lane]           # List tickets in a lane, or all lanes
 kban show <id>             # Show full ticket details (frontmatter + body)
 kban next                  # Print the id of the next actionable ready ticket
@@ -50,6 +51,8 @@ What needs to be accomplished.
 
 Ticket IDs come from the filename (e.g., `FEAT-001.md` → ID is `FEAT-001`).
 
+**Canonical ID format:** `[A-Z]+-[0-9]+` — one or more uppercase letters, a hyphen, then one or more digits (e.g., `TASK-001`, `FEAT-042`, `BUG-7`). IDs that don't match this format will be rejected by the web UI and will produce a warning from the CLI. Always use this format when creating ticket files.
+
 ## Dependency and Blocked Rules
 
 - `depends_on: []` means no dependencies — ticket can go straight to `ready`.
@@ -71,32 +74,21 @@ kban promote        # Promote any newly eligible backlog tickets to ready
 
 ## Creating Tickets
 
-**There is no `kban create` command.** To create a ticket, write a `.md` file directly into the appropriate lane directory using the `Write` tool:
+Use `kban create` to create a ticket from the CLI:
 
-- Determine the next available ID by listing the lane directory (e.g., `ls .kban/work/ready/`)
-- Write the file to `.kban/work/<lane>/<ID>.md`
-
-Example file content for `.kban/work/ready/FEAT-009.md`:
-
-```markdown
----
-title: Add dark mode toggle
-priority: medium
-depends_on: []
-blocked: false
----
-
-## Goal
-
-Add a dark/light mode toggle to the settings page.
-
-## Tasks
-
-- [ ] Add toggle component
-- [ ] Persist preference to localStorage
+```bash
+kban create FEAT-009 --title "Add dark mode toggle" --priority medium
+kban create BUG-003 --title "Fix login redirect" --priority high --lane ready
+kban create FEAT-010 --title "Export to CSV" --depends-on "FEAT-009,TASK-001"
 ```
 
-Verify creation with `kban show <ID>` after writing the file.
+Options:
+- `--title "..."` — ticket title (required)
+- `--priority high|medium|low` — priority (default: `medium`)
+- `--lane backlog|ready|doing|done` — lane to create in (default: `backlog`)
+- `--depends-on ID1,ID2` — comma-separated dependency IDs
+
+Verify creation with `kban show <ID>` after creating.
 
 ## Environment Variables (for `kban serve`)
 

@@ -1,0 +1,32 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bats:
+    name: Bash (bats)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install bats-core
+        run: sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: bats tests/kban.bats
+
+  pytest:
+    name: Python (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run pytest
+        run: pytest tests/test_serve.py -v

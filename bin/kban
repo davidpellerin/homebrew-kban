@@ -58,6 +58,7 @@ Commands:
     install skill user          Install Claude Code skill for your user account (all projects)
     install skill project       Install Claude Code skill for this project only
     board                       Show the board overview
+    create <id>                 Create a new ticket (default lane: backlog)
     list [lane]                 List tickets in a lane (or all lanes)
     show <id>                   Show ticket details
     next                        Show the next actionable ticket (ready + deps met)
@@ -71,6 +72,12 @@ Commands:
     unarchive <id>              Restore ticket from archive to done
     tickets [lane]              Flat list of all tickets with lane/priority/deps
     serve                       Start the web UI (default: http://localhost:8080)
+
+Options for create:
+    --title "..."               Ticket title (required)
+    --priority high|medium|low  Priority (default: medium)
+    --lane <lane>               Lane to create in (default: backlog)
+    --depends-on ID1,ID2        Comma-separated dependency IDs
 
 Lanes: backlog, ready, doing, done, archive
 
@@ -376,6 +383,89 @@ cmd_next() {
     fi
 }
 
+# Warn if ticket ID does not match the canonical format (UPPER-digits)
+# Arguments:
+#   $1 - ticket id
+validate_ticket_id() {
+    local id="${1}"
+    if ! [[ "${id}" =~ ^[A-Z]+-[0-9]+$ ]]; then
+        log_warn "Ticket ID '${id}' does not match canonical format (e.g. TASK-001, FEAT-042). The web UI will reject non-canonical IDs."
+    fi
+}
+
+# Create a new ticket
+# Arguments:
+#   $1 - ticket id
+#   Options: --title, --priority, --lane, --depends-on
+cmd_create() {
+    [[ $# -eq 0 ]] && die "Usage: kban create <id> --title \"...\" [--priority high|medium|low] [--lane backlog|ready|doing|done] [--depends-on ID1,ID2]"
+    local id="${1}"
+    shift
+
+    validate_ticket_id "${id}"
+
+    local title="" priority="medium" lane="backlog" depends_on=""
+
+    while [[ $# -gt 0 ]]; do
+        case "${1}" in
+            --title)      title="${2}"; shift 2 ;;
+            --priority)   priority="${2}"; shift 2 ;;
+            --lane)       lane="${2}"; shift 2 ;;
+            --depends-on) depends_on="${2}"; shift 2 ;;
+            *) die "Unknown option: ${1}" ;;
+        esac
+    done
+
+    [[ -z "${title}" ]] && die "--title is required"
+
+    # Validate priority
+    case "${priority}" in
+        high|medium|low) ;;
+        *) die "Invalid priority: ${priority}. Valid: high, medium, low" ;;
+    esac
+
+    # Validate lane
+    local valid_lane=false
+    local l
+    for l in "${LANES[@]}"; do
+        [[ "${l}" == "${lane}" ]] && valid_lane=true
+    done
+    [[ "${valid_lane}" == "false" ]] && die "Invalid lane: ${lane}. Valid: ${LANES[*]}"
+
+    # Check ticket doesn't already exist
+    local existing
+    # shellcheck disable=SC2310
+    if existing="$(find_ticket "${id}" 2>/dev/null)"; then
+        die "Ticket already exists: ${id} (in $(basename "$(dirname "${existing}")"))"
+    fi
+
+    # Build depends_on YAML value
+    local deps_yaml="[]"
+    if [[ -n "${depends_on}" ]]; then
+        # Convert comma-separated to YAML list: [ID1, ID2]
+        deps_yaml="[$(echo "${depends_on}" | sed 's/,/, /g')]"
+    fi
+
+    local dest="${KBAN_DIR}/${lane}/${id}.md"
+    cat > "${dest}" <<EOF
+---
+title: ${title}
+priority: ${priority}
+depends_on: ${deps_yaml}
+---
+
+## Goal
+
+${title}
+
+## Tasks
+
+- [ ] TODO
+EOF
+
+    log_success "Created ${id} in ${lane}: ${title}"
+}
+
 # Move a ticket to a lane
 # Arguments:
 #   $1 - ticket id
@@ -384,6 +474,7 @@ cmd_move() {
     [[ $# -lt 2 ]] && die "Usage: kban move <id> <lane>"
     local id="${1}"
     local target="${2}"
+    validate_ticket_id "${id}"
 
     local valid=false
     local lane
@@ -638,6 +729,7 @@ main() {
         init)      cmd_init ;;
         install)   cmd_install "$@" ;;
         board)     cmd_board ;;
+        create)    cmd_create "$@" ;;
         list)      cmd_list "$@" ;;
         show)      cmd_show "$@" ;;
         next)      cmd_next ;;
