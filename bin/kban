@@ -35,12 +35,13 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 # =============================================================================
 
 # shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
-readonly KBAN_VERSION="1.8.0"
+readonly KBAN_VERSION="1.10.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
 readonly LANES=(backlog ready doing "done")
 readonly ARCHIVE_LANE="archive"
 readonly COL_WIDTH=22
-readonly TEMPLATES_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../templates"
+TEMPLATES_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../templates"
+readonly TEMPLATES_DIR
 
 # =============================================================================
 # Usage
@@ -443,7 +444,7 @@ cmd_create() {
     local deps_yaml="[]"
     if [[ -n "${depends_on}" ]]; then
         # Convert comma-separated to YAML list: [ID1, ID2]
-        deps_yaml="[$(echo "${depends_on}" | sed 's/,/, /g')]"
+        deps_yaml="[${depends_on//,/, }]"
     fi
 
     local dest="${KBAN_DIR}/${lane}/${id}.md"
