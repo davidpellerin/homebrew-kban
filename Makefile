@@ -1,6 +1,9 @@
-.PHONY: test test-bash test-python
+.PHONY: test test-bash test-python lint
 
-test: test-bash test-python
+test: lint test-bash test-python
+
+lint:
+	shellcheck bin/kban
 
 test-bash:
 	bats tests/kban.bats
