@@ -591,6 +591,73 @@ EOF
     [ "$status" -ne 0 ]
 }
 
+# ─── init: agent prompt install ──────────────────────────────────────────────
+
+@test "init copies agent prompt to config dir" {
+    HOME="$TEST_DIR" run "$KBAN" init
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_DIR/.config/kban/agent-prompt.md" ]
+}
+
+@test "init does not overwrite existing agent prompt" {
+    mkdir -p "$TEST_DIR/.config/kban"
+    echo "custom content" > "$TEST_DIR/.config/kban/agent-prompt.md"
+    HOME="$TEST_DIR" "$KBAN" init
+    grep -q "custom content" "$TEST_DIR/.config/kban/agent-prompt.md"
+}
+
+# ─── work ────────────────────────────────────────────────────────────────────
+
+@test "work fails with nonexistent --prompt file" {
+    HOME="$TEST_DIR" "$KBAN" init
+    run "$KBAN" work --prompt /nonexistent/prompt.md
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "not found" ]]
+}
+
+@test "work fails with unknown option" {
+    HOME="$TEST_DIR" "$KBAN" init
+    run "$KBAN" work --unknown
+    [ "$status" -ne 0 ]
+}
+
+@test "work with no ready tickets exits cleanly" {
+    HOME="$TEST_DIR" "$KBAN" init
+    prompt="$TEST_DIR/prompt.md"
+    echo "test prompt" > "$prompt"
+    run "$KBAN" work --prompt "$prompt"
+    [ "$status" -eq 0 ]
+}
+
+@test "work processes each ready ticket" {
+    mkdir -p "$TEST_DIR/bin"
+    printf '#!/bin/sh\ncat > /dev/null\necho "claude invoked"\n' > "$TEST_DIR/bin/claude"
+    chmod +x "$TEST_DIR/bin/claude"
+
+    HOME="$TEST_DIR" "$KBAN" init
+    "$KBAN" create TASK-001 --title "First task" --lane ready
+    "$KBAN" create TASK-002 --title "Second task" --lane ready
+    prompt="$TEST_DIR/prompt.md"
+    echo "test prompt" > "$prompt"
+
+    run env PATH="$TEST_DIR/bin:$PATH" "$KBAN" work --prompt "$prompt"
+    [ "$status" -eq 0 ]
+    [ -f ".kban/work/doing/TASK-001.md" ]
+    [ -f ".kban/work/doing/TASK-002.md" ]
+}
+
+@test "work uses ~/.config/kban/agent-prompt.md by default" {
+    mkdir -p "$TEST_DIR/bin"
+    printf '#!/bin/sh\ncat > /dev/null\n' > "$TEST_DIR/bin/claude"
+    chmod +x "$TEST_DIR/bin/claude"
+
+    HOME="$TEST_DIR" "$KBAN" init
+    "$KBAN" create TASK-001 --title "Test task" --lane ready
+
+    run env PATH="$TEST_DIR/bin:$PATH" HOME="$TEST_DIR" "$KBAN" work
+    [ "$status" -eq 0 ]
+}
+
 # ─── error handling ───────────────────────────────────────────────────────────
 
 @test "unknown command exits with error" {
