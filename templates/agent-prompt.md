@@ -8,6 +8,5 @@ WORKING INSTRUCTIONS:
   run things in parallel where possible, use specialised skills when they match.
 - Write clean, minimal, well-tested code. Avoid over-engineering.
 - When work is genuinely complete, output a concise summary of what you did.
-- Do NOT call kban done — the Makefile handles lane transitions.
 
 TICKET:
