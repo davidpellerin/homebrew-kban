@@ -225,7 +225,7 @@ cmd_board() {
         header="${header}$(printf "%-${COL_WIDTH}s  " "${label}")"
     done
     # shellcheck disable=SC2154
-    echo -e "${BLUE}${header}${NC}"
+    echo -e "${header}"
 
     # Separator row
     local sep_row=""
@@ -321,7 +321,7 @@ cmd_tickets() {
     local id_w=14 lane_w=9 prio_w=8
 
     # shellcheck disable=SC2154
-    printf "${BLUE}%-${id_w}s  %-${lane_w}s  %-${prio_w}s  %s${NC}\n" "ID" "LANE" "PRIORITY" "TITLE"
+    printf "%-${id_w}s  %-${lane_w}s  %-${prio_w}s  %s\n" "ID" "LANE" "PRIORITY" "TITLE"
     printf '%s\n' "$(printf '%.0s─' {1..70})"
 
     local lane f tid title priority deps blocked_val row_suffix
