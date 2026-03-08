@@ -35,8 +35,9 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 # =============================================================================
 
 # shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
-readonly KBAN_VERSION="1.12.0"
+readonly KBAN_VERSION="1.13.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
+readonly KBAN_CONFIG_DIR="${HOME}/.config/kban"
 readonly LANES=(backlog ready doing "done")
 readonly ARCHIVE_LANE="archive"
 readonly COL_WIDTH=22
@@ -75,6 +76,9 @@ Commands:
     delete <id>                 Delete a ticket permanently
     serve                       Start the web UI (default: http://localhost:8080)
     work [--prompt <file>]      Run claude on every ready ticket
+
+Options for work:
+    --prompt <file>             Agent prompt file (default: ~/.config/kban/agent-prompt.md)
 
 Options for create:
     --title "..."               Ticket title (required)
@@ -204,9 +208,18 @@ cmd_init() {
     # Create a sample backlog ticket
     sample_ticket > "${KBAN_DIR}/backlog/SETUP-001.md"
 
+    # Copy agent prompt to user config dir (once; preserves any customisation)
+    local user_prompt="${KBAN_CONFIG_DIR}/agent-prompt.md"
+    if [[ ! -f "${user_prompt}" ]]; then
+        mkdir -p "${KBAN_CONFIG_DIR}"
+        cp "${TEMPLATES_DIR}/agent-prompt.md" "${user_prompt}"
+        log_info "Agent prompt installed → ${user_prompt} (edit to customise)"
+    fi
+
     log_success "Initialized .kban board at ${KBAN_DIR}"
     log_info "Sample ticket created: SETUP-001 (backlog)"
     log_info "Run 'kban board' to see your board"
+    log_info "Run 'kban work' to process ready tickets with claude"
 }
 
 # Display the kanban board
@@ -728,7 +741,7 @@ cmd_delete() {
 # Options:
 #   --prompt <path>   Path to agent prompt file (default: TEMPLATES_DIR/agent-prompt.md)
 cmd_work() {
-    local prompt_file="${TEMPLATES_DIR}/agent-prompt.md"
+    local prompt_file=""
 
     while [[ $# -gt 0 ]]; do
         case "${1}" in
@@ -736,6 +749,14 @@ cmd_work() {
             *) die "Unknown option: ${1}" ;;
         esac
     done
+
+    if [[ -z "${prompt_file}" ]]; then
+        if [[ -f "${KBAN_CONFIG_DIR}/agent-prompt.md" ]]; then
+            prompt_file="${KBAN_CONFIG_DIR}/agent-prompt.md"
+        else
+            prompt_file="${TEMPLATES_DIR}/agent-prompt.md"
+        fi
+    fi
 
     [[ -f "${prompt_file}" ]] || die "Prompt file not found: ${prompt_file}"
 
