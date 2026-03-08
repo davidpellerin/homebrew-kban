@@ -1,4 +1,4 @@
-.PHONY: test test-bash test-python lint work
+.PHONY: test test-bash test-python lint
 
 test: lint test-bash test-python
 
@@ -10,6 +10,3 @@ test-bash:
 
 test-python:
 	pytest tests/test_serve.py -v -p no:langsmith --cov=web --cov-report=term-missing
-
-work:
-	kban work
