@@ -6,10 +6,26 @@ Homebrew tap for [kban](https://github.com/davidpellerin/homebrew-kban) — a si
 
 ## Install
 
+### macOS (Homebrew)
+
 ```bash
 brew tap davidpellerin/kban
 
 brew install kban
+```
+
+### Linux / macOS (curl)
+
+No package manager required — the installer downloads the latest release and places `kban` in `~/.local/bin` (or `/usr/local/bin` when run as root):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidpellerin/homebrew-kban/main/install.sh | bash
+```
+
+Make sure `~/.local/bin` is in your `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
 ## Getting Started
