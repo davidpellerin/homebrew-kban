@@ -35,7 +35,7 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 # =============================================================================
 
 # shellcheck disable=SC2310  # deps_met/find_ticket return values are handled correctly
-readonly KBAN_VERSION="1.11.0"
+readonly KBAN_VERSION="1.12.0"
 readonly KBAN_DIR="${PWD}/.kban/work"
 readonly LANES=(backlog ready doing "done")
 readonly ARCHIVE_LANE="archive"
@@ -74,6 +74,7 @@ Commands:
     tickets [lane]              Flat list of all tickets with lane/priority/deps
     delete <id>                 Delete a ticket permanently
     serve                       Start the web UI (default: http://localhost:8080)
+    work [--prompt <file>]      Run claude on every ready ticket
 
 Options for create:
     --title "..."               Ticket title (required)
@@ -723,6 +724,31 @@ cmd_delete() {
     log_success "Deleted ${id} (was in ${lane})"
 }
 
+# Run claude against every ready ticket
+# Options:
+#   --prompt <path>   Path to agent prompt file (default: TEMPLATES_DIR/agent-prompt.md)
+cmd_work() {
+    local prompt_file="${TEMPLATES_DIR}/agent-prompt.md"
+
+    while [[ $# -gt 0 ]]; do
+        case "${1}" in
+            --prompt) prompt_file="${2}"; shift 2 ;;
+            *) die "Unknown option: ${1}" ;;
+        esac
+    done
+
+    [[ -f "${prompt_file}" ]] || die "Prompt file not found: ${prompt_file}"
+
+    local f id
+    # shellcheck disable=SC2312
+    while IFS= read -r f; do
+        id="$(basename "${f}" .md)"
+        log_info "Working on ${id}"
+        cmd_start "${id}" || continue
+        { cat "${prompt_file}"; kban show "${id}"; } | claude --dangerously-skip-permissions --print
+    done < <(find "${KBAN_DIR}/ready" -name "*.md" 2>/dev/null | sort)
+}
+
 # Start the web UI
 cmd_serve() {
     local script
@@ -763,6 +789,7 @@ main() {
         tickets)   cmd_tickets "$@" ;;
         delete)    cmd_delete "$@" ;;
         serve)     cmd_serve ;;
+        work)      cmd_work "$@" ;;
         -h|--help) usage ;;
         *) die "Unknown command: ${cmd}. Use 'kban --help' for usage." ;;
     esac
