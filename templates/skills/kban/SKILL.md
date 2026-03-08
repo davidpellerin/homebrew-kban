@@ -5,11 +5,12 @@ description: Manage a filesystem-based kanban board using the kban CLI. Use when
 
 # kban
 
-`kban` is a filesystem-based kanban board. Tickets are Markdown files stored in `.kban/work/<lane>/`. The board has four lanes: `backlog` → `ready` → `doing` → `done`.
+`kban` is a filesystem-based kanban board. Tickets are Markdown files stored in `.kban/work/<lane>/`. The board has four active lanes: `backlog` → `ready` → `doing` → `done`, plus an `archive` lane for completed work hidden from the board.
 
 ## Commands
 
 ```bash
+kban version               # Show kban version
 kban init                  # Create .kban/ structure in current directory
 kban board                 # Show board overview (all lanes and ticket counts)
 kban create <id>           # Create a new ticket (default lane: backlog)
@@ -19,12 +20,16 @@ kban next                  # Print the id of the next actionable ready ticket
 kban start <id>            # Move ticket to doing
 kban done <id>             # Move ticket to done
 kban promote               # Move eligible backlog tickets to ready (deps met + not blocked)
-kban move <id> <lane>      # Move ticket to any lane
+kban move <id> <lane>      # Move ticket to any lane (including archive)
 kban block <id>            # Mark ticket as blocked
 kban unblock <id>          # Clear blocked status from ticket
+kban archive <id>          # Move ticket to archive (hidden from board)
+kban unarchive <id>        # Restore ticket from archive to done
 kban tickets [lane]        # Flat list of all tickets with lane/priority/deps
+kban delete <id>           # Delete a ticket permanently
 kban serve                 # Start the web UI (default: http://localhost:8080)
-kban install skill claude  # Install this skill into a project
+kban install skill user    # Install this skill for your user account (all projects)
+kban install skill project # Install this skill for this project only
 ```
 
 ## Ticket Format
