@@ -657,17 +657,9 @@ cmd_install() {
 
 # Install a Claude Code skill for the current project
 # Arguments:
-#   $1 - tool name (claude)
-#   $2 - scope (user|project)
+#   $1 - scope (user|project)
 cmd_install_skill() {
-    [[ $# -eq 0 ]] && die "Usage: kban install skill user|project"
-    local tool="${1}"
-    shift
-
-    case "${tool}" in
-        claude) cmd_install_skill_claude "$@" ;;
-        *) die "Unknown tool: ${tool}. Supported: claude" ;;
-    esac
+    cmd_install_skill_claude "$@"
 }
 
 cmd_install_skill_claude() {
