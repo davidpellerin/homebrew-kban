@@ -75,12 +75,14 @@ def _ticket_from_path(path):
         text = f.read()
     fm, body = _parse_frontmatter(text)
     blocked_val = fm.get("blocked", "")
+    refined_val = fm.get("refined", "")
     return {
         "id": ticket_id,
         "title": fm.get("title", ticket_id),
         "priority": fm.get("priority", "normal"),
         "depends_on": fm.get("depends_on", []),
         "blocked": blocked_val is True or str(blocked_val).lower() == "true",
+        "refined": refined_val is True or str(refined_val).lower() == "true",
         "body": body,
     }
 
@@ -253,6 +255,7 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 body      = payload.get("body", "").strip()
                 new_lane  = payload.get("lane", "").strip()
                 blocked   = payload.get("blocked", False)
+                refined   = payload.get("refined", False)
             except (json.JSONDecodeError, ValueError):
                 self.send_json({"error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
                 return
@@ -296,10 +299,13 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
                 deps_str = str(depends_on)
 
             is_blocked = blocked is True or str(blocked).lower() == "true"
+            is_refined = refined is True or str(refined).lower() == "true"
 
             content = f"---\ntitle: {title}\npriority: {priority}\ndepends_on: {deps_str}\n"
             if is_blocked:
                 content += "blocked: true\n"
+            if is_refined:
+                content += "refined: true\n"
             content += "---\n"
             if body:
                 content += body + "\n"
