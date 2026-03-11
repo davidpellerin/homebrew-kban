@@ -229,6 +229,28 @@
       white-space: nowrap;
     }
 
+    /* ── Refined badge ──────────────────────────────────────────────────── */
+    .refined-badge {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: var(--green);
+      background: color-mix(in srgb, var(--green) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card.is-refined {
+      border-color: color-mix(in srgb, var(--green) 35%, transparent);
+    }
+
+    .card.is-refined:hover {
+      border-color: color-mix(in srgb, var(--green) 60%, transparent);
+    }
+
     /* ── Modal ──────────────────────────────────────────────────────────── */
     .modal-backdrop {
       position: fixed;
@@ -795,6 +817,10 @@
         <input type="checkbox" class="form-checkbox" id="et-blocked">
         <label class="form-label" for="et-blocked">Blocked</label>
       </div>
+      <div class="form-group form-check">
+        <input type="checkbox" class="form-checkbox" id="et-refined">
+        <label class="form-label" for="et-refined">Refined</label>
+      </div>
       <div class="form-group">
         <label class="form-label" for="et-body">Description</label>
         <textarea class="form-input" id="et-body" rows="6" placeholder="Optional description…"></textarea>
@@ -866,10 +892,16 @@
     document.getElementById('modal-id').textContent    = ticket.id;
     document.getElementById('modal-title').textContent = ticket.title;
 
-    // meta row: priority + blocked + deps
+    // meta row: priority + refined + blocked + deps
     const meta = document.getElementById('modal-meta');
     meta.innerHTML = '';
     meta.appendChild(priorityEl(ticket.priority));
+    if (ticket.refined) {
+      const refinedBadge = document.createElement('span');
+      refinedBadge.className = 'refined-badge';
+      refinedBadge.textContent = '✓ refined';
+      meta.appendChild(refinedBadge);
+    }
     if (ticket.blocked) {
       const badge = document.createElement('span');
       badge.className = 'blocked-badge';
@@ -913,6 +945,7 @@
     document.getElementById('et-priority').value   = t.priority || 'medium';
     document.getElementById('et-lane').value       = currentLaneId;
     document.getElementById('et-blocked').checked  = t.blocked || false;
+    document.getElementById('et-refined').checked  = t.refined || false;
     const etBody = document.getElementById('et-body');
     etBody.value = t.body || '';
     setEditMode(true);
@@ -937,13 +970,14 @@
     const priority = document.getElementById('et-priority').value;
     const lane     = document.getElementById('et-lane').value;
     const blocked  = document.getElementById('et-blocked').checked;
+    const refined  = document.getElementById('et-refined').checked;
     const body     = document.getElementById('et-body').value.trim();
     if (!title) { document.getElementById('et-title').focus(); return; }
     try {
       const res = await fetch('/api/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: currentTicketId, title, priority, lane, blocked, body }),
+        body: JSON.stringify({ id: currentTicketId, title, priority, lane, blocked, refined, body }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1053,10 +1087,18 @@
     card.appendChild(title);
 
     if (ticket.blocked) card.classList.add('is-blocked');
+    if (ticket.refined) card.classList.add('is-refined');
 
     const footer = document.createElement('div');
     footer.className = 'card-footer';
     footer.appendChild(priorityEl(ticket.priority));
+
+    if (ticket.refined) {
+      const refinedBadge = document.createElement('span');
+      refinedBadge.className = 'refined-badge';
+      refinedBadge.textContent = '✓ refined';
+      footer.appendChild(refinedBadge);
+    }
 
     if (ticket.blocked) {
       const badge = document.createElement('span');
