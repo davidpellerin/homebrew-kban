@@ -56,8 +56,8 @@ Usage: kban <command> [arguments]
 Commands:
     version                     Show kban version
     init                        Create .kban folder structure in current directory
-    install skill user          Install Claude Code skill for your user account (all projects)
-    install skill project       Install Claude Code skill for this project only
+    install skill user [-f]     Install Claude Code skill for your user account (all projects)
+    install skill project [-f]  Install Claude Code skill for this project only
     board                       Show the board overview
     create <id>                 Create a new ticket (default lane: backlog)
     list [lane]                 List tickets in a lane (or all lanes)
@@ -663,7 +663,14 @@ cmd_install_skill() {
 }
 
 cmd_install_skill_claude() {
-    local scope="${1:-}"
+    local scope="" force=0
+
+    while [[ $# -gt 0 ]]; do
+        case "${1}" in
+            -f|--force) force=1; shift ;;
+            *) scope="${1}"; shift ;;
+        esac
+    done
 
     # Prompt if scope not specified
     if [[ -z "${scope}" ]]; then
@@ -688,8 +695,8 @@ cmd_install_skill_claude() {
     esac
 
     local dest="${dest_dir}/SKILL.md"
-    if [[ -f "${dest}" ]]; then
-        log_warn "${dest} already exists — skipping"
+    if [[ -f "${dest}" ]] && [[ "${force}" -eq 0 ]]; then
+        log_warn "${dest} already exists — skipping (use -f to overwrite)"
         return 0
     fi
     mkdir -p "${dest_dir}"
