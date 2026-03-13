@@ -6,10 +6,41 @@ Homebrew tap for [kban](https://github.com/davidpellerin/homebrew-kban) — a si
 
 ## Install
 
+### macOS (Homebrew)
+
 ```bash
 brew tap davidpellerin/kban
 
 brew install kban
+```
+
+### Linux / Manual install
+
+Requires: `bash`, `python3` (stdlib only — no pip packages needed)
+
+```bash
+git clone https://github.com/davidpellerin/homebrew-kban.git
+cd homebrew-kban
+make install          # installs to ~/.local by default
+```
+
+Make sure `~/.local/bin` is in your `PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+To install to a different prefix (e.g. `/usr/local`):
+
+```bash
+sudo make install PREFIX=/usr/local
+```
+
+To uninstall:
+
+```bash
+make uninstall
 ```
 
 ## Getting Started
