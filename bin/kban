@@ -742,6 +742,18 @@ main() {
     local cmd="${1}"
     shift
 
+    # Commands that don't require an initialized board
+    case "${cmd}" in
+        version|-h|--help|init|install) : ;;
+        *)
+            if [[ ! -d "${PWD}/.kban" ]]; then
+                echo "Error: No .kban/ board found in the current directory." >&2
+                echo "Run 'kban init' to initialize a new board here." >&2
+                exit 1
+            fi
+            ;;
+    esac
+
     case "${cmd}" in
         version)   cmd_version ;;
         init)      cmd_init ;;
