@@ -149,6 +149,9 @@ class KbanHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/archive":
             self.send_json(archive_json())
 
+        elif path == "/api/meta":
+            self.send_json({"project": os.path.basename(os.getcwd())})
+
         elif path == "/health":
             body = b"ok"
             self.send_response(HTTPStatus.OK)

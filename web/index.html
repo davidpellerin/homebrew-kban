@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>kban</title>
+  <title id="page-title">kban</title>
   <style>
     /* ── Design tokens ──────────────────────────────────────────────────── */
     :root {
@@ -699,7 +699,7 @@
 <body>
 
 <header>
-  <span class="logo" style="cursor:pointer" onclick="loadAndFilter()" title="Refresh">kban</span>
+  <span class="logo" style="cursor:pointer" onclick="loadAndFilter()" title="Refresh">kban<span id="project-name" style="font-weight:400;color:var(--text-muted);margin-left:0.35em"></span></span>
   <div class="view-toggle">
     <button class="view-tab active" id="tab-board" onclick="switchView('board')">Board</button>
     <button class="view-tab" id="tab-archive" onclick="switchView('archive')">Archive</button>
@@ -1438,6 +1438,13 @@
     });
     applyFilter();
   }
+
+  fetch('/api/meta').then(r => r.json()).then(data => {
+    if (data.project) {
+      document.getElementById('page-title').textContent = `${data.project} — kban`;
+      document.getElementById('project-name').textContent = `/ ${data.project}`;
+    }
+  }).catch(() => {});
 
   loadAndFilter();
   setInterval(() => {
