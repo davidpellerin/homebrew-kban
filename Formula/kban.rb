@@ -1,8 +1,8 @@
 class Kban < Formula
   desc "Simple filesystem-based kanban board for Claude Code agents"
   homepage "https://github.com/davidpellerin/homebrew-kban"
-  url "https://github.com/davidpellerin/homebrew-kban/archive/refs/tags/v1.13.0.tar.gz"
-  sha256 "36bb9ddad09ae8d2feca45fd523ddee8c5e5d535c8039049dae13e562bae1d17"
+  url "https://github.com/davidpellerin/homebrew-kban/archive/refs/tags/v1.14.0.tar.gz"
+  sha256 "018bb8509768e83e5796973a39847cdf3bcbc3329c9e88a2de3940bd9d2fa1a5"
   license "MIT"
 
   depends_on "python@3"
