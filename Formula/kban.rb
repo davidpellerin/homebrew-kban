@@ -7,18 +7,18 @@ class Kban < Formula
   on_macos do
     on_arm do
       url "https://github.com/davidpellerin/homebrew-kban/releases/download/v2.0.0/kban-aarch64-apple-darwin.tar.gz"
-      sha256 "PLACEHOLDER"
+      sha256 "fca565f4ea423acc2bc2327dbc5bfc097051ce9b0581769dc768b87786302769"
     end
     on_intel do
       url "https://github.com/davidpellerin/homebrew-kban/releases/download/v2.0.0/kban-x86_64-apple-darwin.tar.gz"
-      sha256 "PLACEHOLDER"
+      sha256 "57a46190da683317f1380433dabfd9eee1e296912e678842837d5f2db94c924f"
     end
   end
 
   on_linux do
     on_intel do
       url "https://github.com/davidpellerin/homebrew-kban/releases/download/v2.0.0/kban-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "PLACEHOLDER"
+      sha256 "c9d6b833dd8431171acc09258d8d210b583153263c9314af8565fef36f896835"
     end
   end
 
