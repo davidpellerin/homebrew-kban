@@ -1,0 +1,1 @@
+/Users/david/src/personal/homebrew-kban/kban-rs/target/debug/kban: /Users/david/src/personal/homebrew-kban/kban-rs/src/../../templates/sample-tickets/sample-ticket.md /Users/david/src/personal/homebrew-kban/kban-rs/src/../../templates/skills/kban/SKILL.md /Users/david/src/personal/homebrew-kban/kban-rs/src/main.rs

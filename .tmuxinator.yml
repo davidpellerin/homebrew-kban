@@ -1,0 +1,11 @@
+name: homebrew-kban
+root: .
+startup_window: zsh
+
+on_project_start: (crontab -l 2>/dev/null | grep -v "homebrew-kban:heartbeats"; echo "30 * * * 1-5 tmux send-keys -t 'homebrew-kban:heartbeats.0' 'read HEARTBEAT.md and execute all of the steps' C-m") | crontab -
+on_project_stop: crontab -l 2>/dev/null | grep -v "homebrew-kban:heartbeats" | crontab -
+
+windows:
+  - heartbeats: claude --dangerously-skip-permissions --debug
+  - editor: vim
+  - zsh:
