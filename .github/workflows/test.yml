@@ -11,7 +11,7 @@ jobs:
     name: Bash (bats)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install bats-core
         run: sudo apt-get install -y bats
@@ -23,7 +23,7 @@ jobs:
     name: Python (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install pytest + coverage
         run: pip install pytest pytest-cov
